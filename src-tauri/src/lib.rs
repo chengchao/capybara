@@ -10,8 +10,7 @@ pub fn run() {
             let handle = app.handle().clone();
             #[cfg(debug_assertions)]
             {
-                tauri::async_runtime::block_on(vm::smoke_test(&handle))
-                    .map_err(|e| -> Box<dyn std::error::Error> { e.to_string().into() })?;
+                tauri::async_runtime::block_on(vm::smoke_test(&handle))?;
             }
             #[cfg(not(debug_assertions))]
             {

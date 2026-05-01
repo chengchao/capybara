@@ -41,12 +41,8 @@ mkdir -p "${vendor_dir}"
 echo "fetch-lima: extracting to ${vendor_dir}"
 tar -xzf "${tmpdir}/${tarball}" -C "${vendor_dir}"
 
-if [[ ! -f "${limactl_path}" ]]; then
-  echo "fetch-lima: extraction succeeded but ${limactl_path} is missing" >&2
-  exit 1
-fi
 if [[ ! -x "${limactl_path}" ]]; then
-  echo "fetch-lima: ${limactl_path} is not executable" >&2
+  echo "fetch-lima: extraction succeeded but ${limactl_path} is missing or not executable" >&2
   exit 1
 fi
 
