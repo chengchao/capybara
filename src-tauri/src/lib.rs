@@ -1,27 +1,33 @@
+use std::time::Duration;
+
+use tauri::RunEvent;
+
 mod commands;
 mod vm;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![commands::greet])
         .setup(|app| {
             let handle = app.handle().clone();
-            #[cfg(debug_assertions)]
-            {
-                tauri::async_runtime::block_on(vm::smoke_test(&handle))?;
-            }
-            #[cfg(not(debug_assertions))]
-            {
-                tauri::async_runtime::spawn(async move {
-                    if let Err(e) = vm::smoke_test(&handle).await {
-                        eprintln!("lima smoke test failed: {e}");
-                    }
-                });
-            }
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = vm::ensure_vm(&handle).await {
+                    eprintln!("vm: failed: {e}");
+                }
+            });
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|handle, event| {
+        if matches!(event, RunEvent::Exit) {
+            let handle = handle.clone();
+            tauri::async_runtime::block_on(async move {
+                let _ = tokio::time::timeout(Duration::from_secs(10), vm::stop_vm(&handle)).await;
+            });
+        }
+    });
 }
