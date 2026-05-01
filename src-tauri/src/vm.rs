@@ -16,7 +16,6 @@ disk: 20GiB
 ssh:
   loadDotSSHPubKeys: false
   forwardAgent: false
-mounts: []
 ";
 
 struct LimaPaths {
@@ -59,9 +58,21 @@ pub async fn ensure_vm(app: &AppHandle) -> Result<(), VmError> {
             let yaml_path_str = yaml_path
                 .to_str()
                 .expect("LIMA_HOME path under home_dir is utf-8 on macOS");
+            // `--mount-none` is load-bearing: without it Lima's CLI auto-injects a read-only
+            // `~` mount during create (inherited via `template:_default/mounts`), exposing the
+            // entire host home — `~/.ssh`, credentials, history files — to the guest. YAML
+            // `mounts: []` does NOT suppress this (list-typed inherited fields merge by
+            // concatenation). File-sharing UX lands in a follow-up PR.
             run_limactl(
                 &paths,
-                &["create", "--name", INSTANCE_NAME, "--tty=false", yaml_path_str],
+                &[
+                    "create",
+                    "--name",
+                    INSTANCE_NAME,
+                    "--mount-none",
+                    "--tty=false",
+                    yaml_path_str,
+                ],
             )
             .await?;
             eprintln!("vm: starting...");
