@@ -25,7 +25,9 @@
     "active": true,
     "targets": "all",
     "resources": [
-      "vendor/lima/bin/limactl"
+      "vendor/lima/bin/**/*",
+      "vendor/lima/share/lima/**/*",
+      "vendor/lima/libexec/lima/**/*"
     ],
     "icon": [
       "icons/32x32.png",

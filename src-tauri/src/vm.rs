@@ -6,29 +6,78 @@ use serde::Deserialize;
 use tauri::{AppHandle, Manager};
 use thiserror::Error;
 use tokio::process::Command;
-use tokio::try_join;
 
-pub async fn smoke_test(app: &AppHandle) -> Result<(), VmError> {
-    let limactl = resolve_limactl(app)?;
-    eprintln!("lima: resolved limactl at {}", limactl.display());
+pub const INSTANCE_NAME: &str = "agent";
 
-    ensure_executable(&limactl)?;
+const AGENT_YAML: &str = "base: template:default
+cpus: 2
+memory: 2GiB
+disk: 20GiB
+ssh:
+  loadDotSSHPubKeys: false
+  forwardAgent: false
+mounts: []
+";
 
-    let (version, list_json) = try_join!(
-        run_limactl(&limactl, &["--version"]),
-        run_limactl(&limactl, &["list", "--format=json"]),
-    )?;
-    eprintln!("lima --version: {}", version.trim());
+pub struct LimaPaths {
+    pub limactl: PathBuf,
+    pub lima_home: PathBuf,
+}
 
+impl LimaPaths {
+    pub fn resolve(app: &AppHandle) -> Result<Self, VmError> {
+        let resource_dir = app.path().resource_dir().map_err(VmError::ResolvePath)?;
+        // LIMA_HOME must stay short on macOS: Lima writes `<LIMA_HOME>/<instance>/ssh.sock.<PID>`
+        // which is bound by UNIX_PATH_MAX = 104. `~/Library/Application Support/<bundle-id>/lima/`
+        // already pushes that to ~107 with a 16-digit PID, so we anchor LIMA_HOME at `~/.capybara/lima`.
+        let home_dir = app.path().home_dir().map_err(VmError::ResolvePath)?;
+        Ok(Self {
+            limactl: resource_dir.join("vendor/lima/bin/limactl"),
+            lima_home: home_dir.join(".capybara/lima"),
+        })
+    }
+}
+
+pub async fn ensure_vm(app: &AppHandle) -> Result<(), VmError> {
+    let paths = LimaPaths::resolve(app)?;
+    tokio::fs::create_dir_all(&paths.lima_home)
+        .await
+        .map_err(VmError::Io)?;
+    ensure_executable(&paths.limactl)?;
+
+    let list_json = run_limactl(&paths, &["list", "--format=json"]).await?;
     let instances = parse_list_output(&list_json)?;
-    eprintln!("lima list (parsed): {} instance(s)", instances.len());
+    let existing = instances.iter().find(|i| i.name == INSTANCE_NAME);
 
+    if existing.is_none() {
+        eprintln!("vm: downloading image (first run, this may take a minute)...");
+        let yaml_path = paths.lima_home.join(format!("{INSTANCE_NAME}.yaml"));
+        tokio::fs::write(&yaml_path, AGENT_YAML)
+            .await
+            .map_err(VmError::Io)?;
+        let yaml_path_str = yaml_path.to_str().expect("app_data_dir is utf-8 on macOS");
+        run_limactl(
+            &paths,
+            &["create", "--name", INSTANCE_NAME, "--tty=false", yaml_path_str],
+        )
+        .await?;
+    }
+
+    if existing.map(|i| i.status.as_str()) != Some("Running") {
+        eprintln!("vm: starting...");
+        run_limactl(&paths, &["start", INSTANCE_NAME, "--tty=false"]).await?;
+    }
+
+    eprintln!("vm: ready");
     Ok(())
 }
 
-fn resolve_limactl(app: &AppHandle) -> Result<PathBuf, VmError> {
-    let resource_dir = app.path().resource_dir().map_err(VmError::ResolvePath)?;
-    Ok(resource_dir.join("vendor/lima/bin/limactl"))
+pub async fn stop_vm(app: &AppHandle) -> Result<(), VmError> {
+    let paths = LimaPaths::resolve(app)?;
+    eprintln!("vm: stopping...");
+    run_limactl(&paths, &["stop", INSTANCE_NAME, "--tty=false"])
+        .await
+        .map(|_| ())
 }
 
 fn ensure_executable(path: &Path) -> Result<(), VmError> {
@@ -51,9 +100,10 @@ fn ensure_executable(path: &Path) -> Result<(), VmError> {
     Ok(())
 }
 
-async fn run_limactl(limactl: &Path, args: &[&str]) -> Result<String, VmError> {
-    let output = Command::new(limactl)
+async fn run_limactl(paths: &LimaPaths, args: &[&str]) -> Result<String, VmError> {
+    let output = Command::new(&paths.limactl)
         .args(args)
+        .env("LIMA_HOME", &paths.lima_home)
         .output()
         .await
         .map_err(VmError::Spawn)?;
@@ -68,7 +118,6 @@ async fn run_limactl(limactl: &Path, args: &[&str]) -> Result<String, VmError> {
 }
 
 #[derive(Debug, Deserialize)]
-#[allow(dead_code)]
 struct LimaInstance {
     name: String,
     status: String,
@@ -121,6 +170,9 @@ pub enum VmError {
 
     #[error("limactl is not executable: {0}")]
     NotExecutable(PathBuf),
+
+    #[error("filesystem error: {0}")]
+    Io(#[source] io::Error),
 
     #[error("failed to spawn limactl: {0}")]
     Spawn(#[source] io::Error),
