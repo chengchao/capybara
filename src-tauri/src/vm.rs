@@ -7,7 +7,7 @@ use tauri::{AppHandle, Manager};
 use thiserror::Error;
 use tokio::process::Command;
 
-pub const INSTANCE_NAME: &str = "agent";
+const INSTANCE_NAME: &str = "agent";
 
 const AGENT_YAML: &str = "base: template:default
 cpus: 2
@@ -19,13 +19,13 @@ ssh:
 mounts: []
 ";
 
-pub struct LimaPaths {
-    pub limactl: PathBuf,
-    pub lima_home: PathBuf,
+struct LimaPaths {
+    limactl: PathBuf,
+    lima_home: PathBuf,
 }
 
 impl LimaPaths {
-    pub fn resolve(app: &AppHandle) -> Result<Self, VmError> {
+    fn resolve(app: &AppHandle) -> Result<Self, VmError> {
         let resource_dir = app.path().resource_dir().map_err(VmError::ResolvePath)?;
         // LIMA_HOME must stay short on macOS: Lima writes `<LIMA_HOME>/<instance>/ssh.sock.<PID>`
         // which is bound by UNIX_PATH_MAX = 104. `~/Library/Application Support/<bundle-id>/lima/`
@@ -40,36 +40,55 @@ impl LimaPaths {
 
 pub async fn ensure_vm(app: &AppHandle) -> Result<(), VmError> {
     let paths = LimaPaths::resolve(app)?;
-    tokio::fs::create_dir_all(&paths.lima_home)
-        .await
-        .map_err(VmError::Io)?;
+    fs_create_dir_all(&paths.lima_home).await?;
     ensure_executable(&paths.limactl)?;
 
     let list_json = run_limactl(&paths, &["list", "--format=json"]).await?;
     let instances = parse_list_output(&list_json)?;
-    let existing = instances.iter().find(|i| i.name == INSTANCE_NAME);
+    let status = instances
+        .iter()
+        .find(|i| i.name == INSTANCE_NAME)
+        .map(|i| i.status.as_str());
 
-    if existing.is_none() {
-        eprintln!("vm: downloading image (first run, this may take a minute)...");
-        let yaml_path = paths.lima_home.join(format!("{INSTANCE_NAME}.yaml"));
-        tokio::fs::write(&yaml_path, AGENT_YAML)
-            .await
-            .map_err(VmError::Io)?;
-        let yaml_path_str = yaml_path.to_str().expect("app_data_dir is utf-8 on macOS");
-        run_limactl(
-            &paths,
-            &["create", "--name", INSTANCE_NAME, "--tty=false", yaml_path_str],
-        )
-        .await?;
-    }
-
-    if existing.map(|i| i.status.as_str()) != Some("Running") {
-        eprintln!("vm: starting...");
-        run_limactl(&paths, &["start", INSTANCE_NAME, "--tty=false"]).await?;
+    match status {
+        Some("Running") => {}
+        None => {
+            eprintln!("vm: downloading image (first run, this may take a minute)...");
+            let yaml_path = paths.lima_home.join(format!("{INSTANCE_NAME}.yaml"));
+            fs_write(&yaml_path, AGENT_YAML).await?;
+            let yaml_path_str = yaml_path
+                .to_str()
+                .expect("LIMA_HOME path under home_dir is utf-8 on macOS");
+            run_limactl(
+                &paths,
+                &["create", "--name", INSTANCE_NAME, "--tty=false", yaml_path_str],
+            )
+            .await?;
+            eprintln!("vm: starting...");
+            run_limactl(&paths, &["start", INSTANCE_NAME, "--tty=false"]).await?;
+        }
+        Some(_) => {
+            eprintln!("vm: starting...");
+            run_limactl(&paths, &["start", INSTANCE_NAME, "--tty=false"]).await?;
+        }
     }
 
     eprintln!("vm: ready");
     Ok(())
+}
+
+async fn fs_create_dir_all(path: &Path) -> Result<(), VmError> {
+    tokio::fs::create_dir_all(path).await.map_err(|source| VmError::Fs {
+        path: path.to_path_buf(),
+        source,
+    })
+}
+
+async fn fs_write(path: &Path, contents: &str) -> Result<(), VmError> {
+    tokio::fs::write(path, contents).await.map_err(|source| VmError::Fs {
+        path: path.to_path_buf(),
+        source,
+    })
 }
 
 pub async fn stop_vm(app: &AppHandle) -> Result<(), VmError> {
@@ -171,8 +190,12 @@ pub enum VmError {
     #[error("limactl is not executable: {0}")]
     NotExecutable(PathBuf),
 
-    #[error("filesystem error: {0}")]
-    Io(#[source] io::Error),
+    #[error("filesystem error on {path}: {source}")]
+    Fs {
+        path: PathBuf,
+        #[source]
+        source: io::Error,
+    },
 
     #[error("failed to spawn limactl: {0}")]
     Spawn(#[source] io::Error),
