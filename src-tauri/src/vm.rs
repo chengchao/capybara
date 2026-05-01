@@ -1,8 +1,12 @@
+use std::io;
 use std::path::{Path, PathBuf};
+use std::string::FromUtf8Error;
 
 use serde::Deserialize;
 use tauri::{AppHandle, Manager};
+use thiserror::Error;
 use tokio::process::Command;
+use tokio::try_join;
 
 pub async fn smoke_test(app: &AppHandle) -> Result<(), VmError> {
     let limactl = resolve_limactl(app)?;
@@ -10,10 +14,12 @@ pub async fn smoke_test(app: &AppHandle) -> Result<(), VmError> {
 
     ensure_executable(&limactl)?;
 
-    let version = run_limactl(&limactl, &["--version"]).await?;
+    let (version, list_json) = try_join!(
+        run_limactl(&limactl, &["--version"]),
+        run_limactl(&limactl, &["list", "--format=json"]),
+    )?;
     eprintln!("lima --version: {}", version.trim());
 
-    let list_json = run_limactl(&limactl, &["list", "--format=json"]).await?;
     let instances = parse_list_output(&list_json)?;
     eprintln!("lima list (parsed): {} instance(s)", instances.len());
 
@@ -21,23 +27,17 @@ pub async fn smoke_test(app: &AppHandle) -> Result<(), VmError> {
 }
 
 fn resolve_limactl(app: &AppHandle) -> Result<PathBuf, VmError> {
-    let resource_dir = app
-        .path()
-        .resource_dir()
-        .map_err(|e| VmError::ResolvePath(e.to_string()))?;
+    let resource_dir = app.path().resource_dir().map_err(VmError::ResolvePath)?;
     Ok(resource_dir.join("vendor/lima/bin/limactl"))
 }
 
 fn ensure_executable(path: &Path) -> Result<(), VmError> {
-    let exists = path
-        .try_exists()
-        .map_err(|e| VmError::Stat(path.to_path_buf(), e.to_string()))?;
-    if !exists {
+    let stat = |source| VmError::Stat { path: path.to_path_buf(), source };
+
+    if !path.try_exists().map_err(stat)? {
         return Err(VmError::Missing(path.to_path_buf()));
     }
-    let metadata = path
-        .metadata()
-        .map_err(|e| VmError::Stat(path.to_path_buf(), e.to_string()))?;
+    let metadata = path.metadata().map_err(stat)?;
     if !metadata.is_file() {
         return Err(VmError::NotAFile(path.to_path_buf()));
     }
@@ -56,7 +56,7 @@ async fn run_limactl(limactl: &Path, args: &[&str]) -> Result<String, VmError> {
         .args(args)
         .output()
         .await
-        .map_err(|e| VmError::Spawn(e.to_string()))?;
+        .map_err(VmError::Spawn)?;
 
     if !output.status.success() {
         return Err(VmError::NonZeroExit {
@@ -64,8 +64,7 @@ async fn run_limactl(limactl: &Path, args: &[&str]) -> Result<String, VmError> {
             stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
         });
     }
-    String::from_utf8(output.stdout)
-        .map_err(|e| VmError::Spawn(format!("limactl stdout was not valid utf-8: {e}")))
+    String::from_utf8(output.stdout).map_err(VmError::InvalidUtf8)
 }
 
 #[derive(Debug, Deserialize)]
@@ -82,13 +81,12 @@ fn parse_list_output(s: &str) -> Result<Vec<LimaInstance>, VmError> {
         if line.is_empty() {
             continue;
         }
-        let instance = serde_json::from_str::<LimaInstance>(line).map_err(|source| {
-            VmError::Parse {
+        let instance =
+            serde_json::from_str::<LimaInstance>(line).map_err(|source| VmError::Parse {
                 line_no: idx + 1,
                 snippet: snippet(line),
-                source: source.to_string(),
-            }
-        })?;
+                source,
+            })?;
         out.push(instance);
     }
     Ok(out)
@@ -103,42 +101,48 @@ fn snippet(line: &str) -> String {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum VmError {
-    ResolvePath(String),
-    Stat(PathBuf, String),
+    #[error("could not resolve resource_dir: {0}")]
+    ResolvePath(#[source] tauri::Error),
+
+    #[error("could not stat {path}: {source}")]
+    Stat {
+        path: PathBuf,
+        #[source]
+        source: io::Error,
+    },
+
+    #[error("limactl missing at {0}")]
     Missing(PathBuf),
+
+    #[error("limactl path is not a file: {0}")]
     NotAFile(PathBuf),
+
+    #[error("limactl is not executable: {0}")]
     NotExecutable(PathBuf),
-    Spawn(String),
+
+    #[error("failed to spawn limactl: {0}")]
+    Spawn(#[source] io::Error),
+
+    #[error("limactl stdout was not valid utf-8: {0}")]
+    InvalidUtf8(#[source] FromUtf8Error),
+
+    #[error("limactl exited {}: {stderr}", display_code(*code))]
     NonZeroExit { code: Option<i32>, stderr: String },
-    Parse { line_no: usize, snippet: String, source: String },
+
+    #[error("could not parse `limactl list --format=json` line {line_no}: {source} (snippet: {snippet})")]
+    Parse {
+        line_no: usize,
+        snippet: String,
+        #[source]
+        source: serde_json::Error,
+    },
 }
 
-impl std::fmt::Display for VmError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            VmError::ResolvePath(e) => write!(f, "could not resolve resource_dir: {e}"),
-            VmError::Stat(p, e) => write!(f, "could not stat {}: {e}", p.display()),
-            VmError::Missing(p) => write!(f, "limactl missing at {}", p.display()),
-            VmError::NotAFile(p) => write!(f, "limactl path is not a file: {}", p.display()),
-            VmError::NotExecutable(p) => {
-                write!(f, "limactl is not executable: {}", p.display())
-            }
-            VmError::Spawn(e) => write!(f, "failed to spawn limactl: {e}"),
-            VmError::NonZeroExit { code, stderr } => {
-                let code = code.map(|c| c.to_string()).unwrap_or_else(|| "?".into());
-                write!(f, "limactl exited {code}: {stderr}")
-            }
-            VmError::Parse { line_no, snippet, source } => write!(
-                f,
-                "could not parse `limactl list --format=json` line {line_no}: {source} (snippet: {snippet})"
-            ),
-        }
-    }
+fn display_code(code: Option<i32>) -> String {
+    code.map(|c| c.to_string()).unwrap_or_else(|| "?".into())
 }
-
-impl std::error::Error for VmError {}
 
 #[cfg(test)]
 mod tests {
