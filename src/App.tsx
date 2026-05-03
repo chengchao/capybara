@@ -14,9 +14,7 @@ function App() {
 
   return (
     <main className="container">
-      <div style={{ marginTop: "1em" }}>
-        <VmStatusPill />
-      </div>
+      <VmStatusPill />
       <h1>Welcome to Tauri + React</h1>
 
       <div className="row">

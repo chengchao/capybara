@@ -27,8 +27,10 @@ pub enum VmStatus {
     Failed { reason: String },
 }
 
+const VM_STATUS_EVENT: &str = "vm-status";
+
 pub struct VmState {
-    pub status: Mutex<VmStatus>,
+    status: Mutex<VmStatus>,
 }
 
 impl Default for VmState {
@@ -41,7 +43,7 @@ pub fn emit_status(app: &AppHandle, status: VmStatus) {
     if let Some(state) = app.try_state::<VmState>() {
         *state.status.lock().unwrap() = status.clone();
     }
-    let _ = app.emit("vm-status", status);
+    let _ = app.emit(VM_STATUS_EVENT, status);
 }
 
 #[tauri::command]

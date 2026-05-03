@@ -95,6 +95,45 @@ button {
   margin-right: 5px;
 }
 
+.vm-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.25em 0.7em;
+  border-radius: 999px;
+  font-size: 0.85em;
+  font-weight: 500;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    sans-serif;
+  margin-top: 1em;
+}
+
+.vm-pill--starting {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.vm-pill--running {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.vm-pill--failed {
+  background: #fee2e2;
+  color: #991b1b;
+  align-items: flex-start;
+  max-width: 100%;
+}
+
+.vm-pill__reason {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 6em;
+  overflow: auto;
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     color: #f6f6f6;
