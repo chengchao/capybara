@@ -9,12 +9,17 @@ mod vm;
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![commands::greet])
+        .invoke_handler(tauri::generate_handler![commands::greet, vm::get_vm_status])
+        .manage(vm::VmState::default())
         .setup(|app| {
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = vm::ensure_vm(&handle).await {
                     eprintln!("vm: failed: {e}");
+                    vm::emit_status(
+                        &handle,
+                        vm::VmStatus::Failed { reason: e.to_string() },
+                    );
                 }
             });
             Ok(())
