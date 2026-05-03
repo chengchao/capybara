@@ -1,9 +1,10 @@
 use std::io;
 use std::path::{Path, PathBuf};
 use std::string::FromUtf8Error;
+use std::sync::Mutex;
 
-use serde::Deserialize;
-use tauri::{AppHandle, Manager};
+use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Emitter, Manager};
 use thiserror::Error;
 use tokio::process::Command;
 
@@ -17,6 +18,36 @@ ssh:
   loadDotSSHPubKeys: false
   forwardAgent: false
 ";
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum VmStatus {
+    Starting,
+    Running,
+    Failed { reason: String },
+}
+
+pub struct VmState {
+    pub status: Mutex<VmStatus>,
+}
+
+impl Default for VmState {
+    fn default() -> Self {
+        Self { status: Mutex::new(VmStatus::Starting) }
+    }
+}
+
+pub fn emit_status(app: &AppHandle, status: VmStatus) {
+    if let Some(state) = app.try_state::<VmState>() {
+        *state.status.lock().unwrap() = status.clone();
+    }
+    let _ = app.emit("vm-status", status);
+}
+
+#[tauri::command]
+pub fn get_vm_status(state: tauri::State<'_, VmState>) -> VmStatus {
+    state.status.lock().unwrap().clone()
+}
 
 struct LimaPaths {
     limactl: PathBuf,
@@ -39,6 +70,7 @@ impl LimaPaths {
 
 pub async fn ensure_vm(app: &AppHandle) -> Result<(), VmError> {
     let paths = LimaPaths::resolve(app)?;
+    emit_status(app, VmStatus::Starting);
     fs_create_dir_all(&paths.lima_home).await?;
     ensure_executable(&paths.limactl)?;
 
@@ -84,6 +116,7 @@ pub async fn ensure_vm(app: &AppHandle) -> Result<(), VmError> {
         }
     }
 
+    emit_status(app, VmStatus::Running);
     eprintln!("vm: ready");
     Ok(())
 }
