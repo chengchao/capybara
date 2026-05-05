@@ -27,7 +27,8 @@
     "resources": [
       "vendor/lima/bin/**/*",
       "vendor/lima/share/lima/**/*",
-      "vendor/lima/libexec/lima/**/*"
+      "vendor/lima/libexec/lima/**/*",
+      "resources/supervisor/capybara_supervisor.py"
     ],
     "icon": [
       "icons/32x32.png",

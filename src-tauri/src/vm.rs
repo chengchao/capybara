@@ -1,14 +1,20 @@
 use std::io;
 use std::path::{Path, PathBuf};
+use std::process::Stdio;
 use std::string::FromUtf8Error;
 use std::sync::Mutex;
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager};
 use thiserror::Error;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, Lines};
 use tokio::process::Command;
+use tokio::process::{Child, ChildStdin, ChildStdout};
 
 const INSTANCE_NAME: &str = "agent";
+const SUPERVISOR_RESPONSE_TIMEOUT: Duration = Duration::from_secs(30);
 
 const AGENT_YAML: &str = "base: template:default
 cpus: 2
@@ -35,7 +41,9 @@ pub struct VmState {
 
 impl Default for VmState {
     fn default() -> Self {
-        Self { status: Mutex::new(VmStatus::Starting) }
+        Self {
+            status: Mutex::new(VmStatus::Starting),
+        }
     }
 }
 
@@ -54,6 +62,7 @@ pub fn get_vm_status(state: tauri::State<'_, VmState>) -> VmStatus {
 struct LimaPaths {
     limactl: PathBuf,
     lima_home: PathBuf,
+    supervisor_source: PathBuf,
 }
 
 impl LimaPaths {
@@ -66,6 +75,7 @@ impl LimaPaths {
         Ok(Self {
             limactl: resource_dir.join("vendor/lima/bin/limactl"),
             lima_home: home_dir.join(".capybara/lima"),
+            supervisor_source: resource_dir.join("resources/supervisor/capybara_supervisor.py"),
         })
     }
 }
@@ -118,23 +128,30 @@ pub async fn ensure_vm(app: &AppHandle) -> Result<(), VmError> {
         }
     }
 
+    install_supervisor(&paths).await?;
+    smoke_test_supervisor(&paths).await?;
+
     emit_status(app, VmStatus::Running);
     eprintln!("vm: ready");
     Ok(())
 }
 
 async fn fs_create_dir_all(path: &Path) -> Result<(), VmError> {
-    tokio::fs::create_dir_all(path).await.map_err(|source| VmError::Fs {
-        path: path.to_path_buf(),
-        source,
-    })
+    tokio::fs::create_dir_all(path)
+        .await
+        .map_err(|source| VmError::Fs {
+            path: path.to_path_buf(),
+            source,
+        })
 }
 
 async fn fs_write(path: &Path, contents: &str) -> Result<(), VmError> {
-    tokio::fs::write(path, contents).await.map_err(|source| VmError::Fs {
-        path: path.to_path_buf(),
-        source,
-    })
+    tokio::fs::write(path, contents)
+        .await
+        .map_err(|source| VmError::Fs {
+            path: path.to_path_buf(),
+            source,
+        })
 }
 
 pub async fn stop_vm(app: &AppHandle) -> Result<(), VmError> {
@@ -146,7 +163,10 @@ pub async fn stop_vm(app: &AppHandle) -> Result<(), VmError> {
 }
 
 fn ensure_executable(path: &Path) -> Result<(), VmError> {
-    let stat = |source| VmError::Stat { path: path.to_path_buf(), source };
+    let stat = |source| VmError::Stat {
+        path: path.to_path_buf(),
+        source,
+    };
 
     if !path.try_exists().map_err(stat)? {
         return Err(VmError::Missing(path.to_path_buf()));
@@ -161,6 +181,22 @@ fn ensure_executable(path: &Path) -> Result<(), VmError> {
         if metadata.permissions().mode() & 0o111 == 0 {
             return Err(VmError::NotExecutable(path.to_path_buf()));
         }
+    }
+    Ok(())
+}
+
+fn ensure_regular_file(path: &Path) -> Result<(), VmError> {
+    let stat = |source| VmError::Stat {
+        path: path.to_path_buf(),
+        source,
+    };
+
+    if !path.try_exists().map_err(stat)? {
+        return Err(VmError::Missing(path.to_path_buf()));
+    }
+    let metadata = path.metadata().map_err(stat)?;
+    if !metadata.is_file() {
+        return Err(VmError::NotAFile(path.to_path_buf()));
     }
     Ok(())
 }
@@ -180,6 +216,195 @@ async fn run_limactl(paths: &LimaPaths, args: &[&str]) -> Result<String, VmError
         });
     }
     String::from_utf8(output.stdout).map_err(VmError::InvalidUtf8)
+}
+
+async fn install_supervisor(paths: &LimaPaths) -> Result<(), VmError> {
+    ensure_regular_file(&paths.supervisor_source)?;
+
+    eprintln!("vm: installing supervisor...");
+    run_limactl(
+        paths,
+        &[
+            "shell",
+            INSTANCE_NAME,
+            "--",
+            "sudo",
+            "mkdir",
+            "-p",
+            "/opt/capybara",
+        ],
+    )
+    .await?;
+
+    let source = paths
+        .supervisor_source
+        .to_str()
+        .expect("bundled supervisor path is utf-8");
+    let destination = format!("{INSTANCE_NAME}:/tmp/capybara_supervisor.py");
+    run_limactl(paths, &["copy", source, &destination]).await?;
+
+    run_limactl(
+        paths,
+        &[
+            "shell",
+            INSTANCE_NAME,
+            "--",
+            "sudo",
+            "install",
+            "-m",
+            "0755",
+            "/tmp/capybara_supervisor.py",
+            "/opt/capybara/supervisor.py",
+        ],
+    )
+    .await?;
+
+    Ok(())
+}
+
+async fn smoke_test_supervisor(paths: &LimaPaths) -> Result<(), VmError> {
+    eprintln!("vm: testing supervisor...");
+    let mut client = SupervisorClient::start(paths).await?;
+    client.request("ping", json!({})).await?;
+    client
+        .request("create_session", json!({ "session_id": "smoke_session" }))
+        .await?;
+    let smoke_result = async {
+        let result = client
+            .request(
+                "run_as_session",
+                json!({
+                    "session_id": "smoke_session",
+                    "cwd": "/sessions/smoke_session/work",
+                    "command": "id -un && pwd",
+                    "timeout_ms": 5000,
+                }),
+            )
+            .await?;
+        let exit_code = result
+            .get("exitCode")
+            .and_then(Value::as_i64)
+            .ok_or_else(|| VmError::SupervisorProtocol("missing exitCode".into()))?;
+        if exit_code != 0 {
+            let stderr = result.get("stderr").and_then(Value::as_str).unwrap_or("");
+            return Err(VmError::SupervisorProtocol(format!(
+                "smoke command failed with {exit_code}: {stderr}"
+            )));
+        }
+        Ok(())
+    }
+    .await;
+    let cleanup_result = client
+        .request("delete_session", json!({ "session_id": "smoke_session" }))
+        .await;
+    client.shutdown().await?;
+    smoke_result?;
+    cleanup_result?;
+    Ok(())
+}
+
+struct SupervisorClient {
+    child: Child,
+    stdin: ChildStdin,
+    lines: Lines<BufReader<ChildStdout>>,
+    next_id: u64,
+}
+
+impl SupervisorClient {
+    async fn start(paths: &LimaPaths) -> Result<Self, VmError> {
+        let mut child = Command::new(&paths.limactl)
+            .args([
+                "shell",
+                INSTANCE_NAME,
+                "--",
+                "sudo",
+                "python3",
+                "/opt/capybara/supervisor.py",
+            ])
+            .env("LIMA_HOME", &paths.lima_home)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .kill_on_drop(true)
+            .spawn()
+            .map_err(VmError::Spawn)?;
+
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| VmError::SupervisorProtocol("supervisor stdin unavailable".into()))?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| VmError::SupervisorProtocol("supervisor stdout unavailable".into()))?;
+
+        Ok(Self {
+            child,
+            stdin,
+            lines: BufReader::new(stdout).lines(),
+            next_id: 0,
+        })
+    }
+
+    async fn request(&mut self, method: &str, params: Value) -> Result<Value, VmError> {
+        self.next_id += 1;
+        let id = self.next_id.to_string();
+        let request = json!({
+            "id": id,
+            "method": method,
+            "params": params,
+        });
+        self.stdin
+            .write_all(request.to_string().as_bytes())
+            .await
+            .map_err(VmError::SupervisorIo)?;
+        self.stdin
+            .write_all(b"\n")
+            .await
+            .map_err(VmError::SupervisorIo)?;
+        self.stdin.flush().await.map_err(VmError::SupervisorIo)?;
+
+        let line = self.lines.next_line();
+        let line = tokio::time::timeout(SUPERVISOR_RESPONSE_TIMEOUT, line)
+            .await
+            .map_err(|_| VmError::SupervisorTimeout)?
+            .map_err(VmError::SupervisorIo)?
+            .ok_or_else(|| {
+                VmError::SupervisorProtocol("supervisor exited without response".into())
+            })?;
+        let response: SupervisorResponse =
+            serde_json::from_str(&line).map_err(VmError::SupervisorJson)?;
+        if response.id.as_deref() != Some(&id) {
+            return Err(VmError::SupervisorProtocol(format!(
+                "response id mismatch: expected {id}, got {:?}",
+                response.id
+            )));
+        }
+        if let Some(error) = response.error {
+            return Err(VmError::SupervisorProtocol(error.message));
+        }
+        response
+            .result
+            .ok_or_else(|| VmError::SupervisorProtocol("response missing result".into()))
+    }
+
+    async fn shutdown(mut self) -> Result<(), VmError> {
+        let _ = self.request("shutdown", json!({})).await;
+        let _ = self.child.wait().await;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct SupervisorResponse {
+    id: Option<String>,
+    result: Option<Value>,
+    error: Option<SupervisorError>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SupervisorError {
+    message: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -252,6 +477,18 @@ pub enum VmError {
     #[error("limactl exited {}: {stderr}", display_code(*code))]
     NonZeroExit { code: Option<i32>, stderr: String },
 
+    #[error("supervisor I/O failed: {0}")]
+    SupervisorIo(#[source] io::Error),
+
+    #[error("supervisor response was not valid JSON: {0}")]
+    SupervisorJson(#[source] serde_json::Error),
+
+    #[error("supervisor response timed out")]
+    SupervisorTimeout,
+
+    #[error("supervisor protocol error: {0}")]
+    SupervisorProtocol(String),
+
     #[error("could not parse `limactl list --format=json` line {line_no}: {source} (snippet: {snippet})")]
     Parse {
         line_no: usize,
@@ -290,7 +527,8 @@ mod tests {
 
     #[test]
     fn parse_multiple_ndjson_lines() {
-        let input = "{\"name\":\"a\",\"status\":\"Stopped\"}\n{\"name\":\"b\",\"status\":\"Running\"}\n";
+        let input =
+            "{\"name\":\"a\",\"status\":\"Stopped\"}\n{\"name\":\"b\",\"status\":\"Running\"}\n";
         let result = parse_list_output(input).unwrap();
         assert_eq!(result.len(), 2);
         assert_eq!(result[0].name, "a");

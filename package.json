@@ -8,7 +8,9 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "setup": "bash ./src-tauri/scripts/fetch-lima.sh"
+    "setup": "bash ./src-tauri/scripts/fetch-lima.sh",
+    "test:supervisor:image": "docker build -f src-tauri/resources/supervisor/Dockerfile.test -t capybara-supervisor-test src-tauri/resources/supervisor",
+    "test:supervisor": "docker run --rm -v \"$PWD/src-tauri/resources/supervisor:/app:ro\" -w /app capybara-supervisor-test sh -lc 'CAPYBARA_SUPERVISOR_INTEGRATION=1 pytest -q -p no:cacheprovider'"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.0",
