@@ -18,7 +18,9 @@ pub fn run() {
                     eprintln!("vm: failed: {e}");
                     vm::emit_status(
                         &handle,
-                        vm::VmStatus::Failed { reason: e.to_string() },
+                        vm::VmStatus::Failed {
+                            reason: e.to_string(),
+                        },
                     );
                 }
             });
