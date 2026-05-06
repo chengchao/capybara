@@ -23,6 +23,9 @@ disk: 20GiB
 ssh:
   loadDotSSHPubKeys: false
   forwardAgent: false
+mounts:
+  - location: \"~\"
+    writable: true
 ";
 
 #[derive(Debug, Clone, Serialize)]
@@ -63,6 +66,7 @@ struct LimaPaths {
     limactl: PathBuf,
     lima_home: PathBuf,
     supervisor_source: PathBuf,
+    host_home: PathBuf,
 }
 
 impl LimaPaths {
@@ -76,6 +80,7 @@ impl LimaPaths {
             limactl: resource_dir.join("vendor/lima/bin/limactl"),
             lima_home: home_dir.join(".capybara/lima"),
             supervisor_source: resource_dir.join("resources/supervisor/capybara_supervisor.py"),
+            host_home: home_dir,
         })
     }
 }
@@ -102,18 +107,19 @@ pub async fn ensure_vm(app: &AppHandle) -> Result<(), VmError> {
             let yaml_path_str = yaml_path
                 .to_str()
                 .expect("LIMA_HOME path under home_dir is utf-8 on macOS");
-            // `--mount-none` is load-bearing: without it Lima's CLI auto-injects a read-only
-            // `~` mount during create (inherited via `template:_default/mounts`), exposing the
-            // entire host home — `~/.ssh`, credentials, history files — to the guest. YAML
-            // `mounts: []` does NOT suppress this (list-typed inherited fields merge by
-            // concatenation). File-sharing UX lands in a follow-up PR.
+            // The YAML declares a single `~` mount, writable. This intentionally uses the
+            // same `location: "~"` string as the inherited read-only mount from
+            // `template:_default/mounts` so Lima's merger updates the attributes in place
+            // (writable=true wins) instead of producing two entries pointing at the same
+            // target. The supervisor (PR-B) bounds what each session sees inside that
+            // mount; the host (later PRs) owns the policy of which subdirs to expose to
+            // which session.
             run_limactl(
                 &paths,
                 &[
                     "create",
                     "--name",
                     INSTANCE_NAME,
-                    "--mount-none",
                     "--tty=false",
                     yaml_path_str,
                 ],
@@ -128,6 +134,7 @@ pub async fn ensure_vm(app: &AppHandle) -> Result<(), VmError> {
         }
     }
 
+    smoke_test_host_mount(&paths).await?;
     install_supervisor(&paths).await?;
     smoke_test_supervisor(&paths).await?;
 
@@ -216,6 +223,28 @@ async fn run_limactl(paths: &LimaPaths, args: &[&str]) -> Result<String, VmError
         });
     }
     String::from_utf8(output.stdout).map_err(VmError::InvalidUtf8)
+}
+
+async fn smoke_test_host_mount(paths: &LimaPaths) -> Result<(), VmError> {
+    eprintln!("vm: verifying host home mount...");
+    let host_home_str = paths
+        .host_home
+        .to_str()
+        .expect("host home path is utf-8 on macOS");
+    // A working virtiofs mount makes the host home visible at the same path; without it
+    // (stale `--mount-none` instance) the path is missing and `test -d` exits non-zero.
+    // Distinguish a non-zero exit (mount truly missing) from other failures (limactl
+    // crash, ssh hiccup) so unrelated breakage isn't misreported as a mount problem.
+    match run_limactl(
+        paths,
+        &["shell", INSTANCE_NAME, "--", "test", "-d", host_home_str],
+    )
+    .await
+    {
+        Ok(_) => Ok(()),
+        Err(VmError::NonZeroExit { .. }) => Err(VmError::HostMountMissing(paths.host_home.clone())),
+        Err(other) => Err(other),
+    }
 }
 
 async fn install_supervisor(paths: &LimaPaths) -> Result<(), VmError> {
@@ -476,6 +505,12 @@ pub enum VmError {
 
     #[error("limactl exited {}: {stderr}", display_code(*code))]
     NonZeroExit { code: Option<i32>, stderr: String },
+
+    #[error(
+        "host home {0} is not visible inside the VM. The existing instance was created \
+         without the mount; delete it and restart:\n    rm -rf ~/.capybara/lima"
+    )]
+    HostMountMissing(PathBuf),
 
     #[error("supervisor I/O failed: {0}")]
     SupervisorIo(#[source] io::Error),
