@@ -337,10 +337,14 @@ def test_create_session_leaves_mnt_root_owned():
         )
         user_uid = int(subprocess.check_output(["id", "-u", "capybara_owners"], text=True).strip())
 
+        root_uid, root_gid, root_mode = _stat_owner_mode("/sessions/owners")
         home_uid, _, _ = _stat_owner_mode("/sessions/owners/home")
         work_uid, _, _ = _stat_owner_mode("/sessions/owners/work")
         mnt_uid, mnt_gid, mnt_mode = _stat_owner_mode("/sessions/owners/mnt")
 
+        assert root_uid == 0, f"session root should be root-owned, got uid {root_uid}"
+        assert root_gid == 0, f"session root should be root-grouped, got gid {root_gid}"
+        assert root_mode == 0o755, f"session root should be 0755, got {oct(root_mode)}"
         assert home_uid == user_uid, f"home/ should be owned by session user, got uid {home_uid}"
         assert work_uid == user_uid, f"work/ should be owned by session user, got uid {work_uid}"
         assert mnt_uid == 0, f"mnt/ should be root-owned, got uid {mnt_uid}"
@@ -409,6 +413,22 @@ def test_session_user_cannot_create_entries_in_mnt():
         assert linked["result"]["exitCode"] != 0
         assert "Permission denied" in linked["result"]["stderr"]
 
+        replaced = send_request(
+            proc,
+            "run_as_session",
+            {
+                "session_id": "nowrite",
+                "cwd": "/sessions/nowrite/work",
+                "command": "rmdir /sessions/nowrite/mnt && ln -s /etc /sessions/nowrite/mnt",
+                "timeout_ms": 5000,
+            },
+            request_id="replace-mnt",
+        )
+        assert replaced["result"]["exitCode"] != 0
+        assert "Permission denied" in replaced["result"]["stderr"]
+        assert Path("/sessions/nowrite/mnt").is_dir()
+        assert not Path("/sessions/nowrite/mnt").is_symlink()
+
         ok = send_request(
             proc,
             "run_as_session",
@@ -427,6 +447,31 @@ def test_session_user_cannot_create_entries_in_mnt():
                 send_request(proc, "delete_session", {"session_id": "nowrite"}, request_id="cleanup")
             except Exception:
                 pass
+            shutdown(proc)
+
+
+def test_create_session_rejects_existing_mnt_symlink():
+    if not integration_enabled():
+        return
+
+    subprocess.run(["rm", "-rf", "/sessions/badcatalog"], check=False)
+    subprocess.run(["mkdir", "-p", "/sessions/badcatalog"], check=True)
+    os.symlink("/etc", "/sessions/badcatalog/mnt")
+
+    proc = start_supervisor()
+    try:
+        response = send_request(
+            proc,
+            "create_session",
+            {"session_id": "badcatalog"},
+            request_id="create",
+        )
+        assert response["id"] == "create"
+        assert response["error"]["message"] == "/sessions/badcatalog/mnt must be a directory"
+        assert Path("/sessions/badcatalog/mnt").is_symlink()
+    finally:
+        subprocess.run(["rm", "-rf", "/sessions/badcatalog"], check=False)
+        if proc.poll() is None:
             shutdown(proc)
 
 
@@ -475,6 +520,13 @@ def _bind_into_session(session_id, mnt_name, src_dir):
     return target
 
 
+def _setup_bind_source(src_dir):
+    sentinel = os.path.join(src_dir, "host-file")
+    subprocess.run(["mkdir", "-p", src_dir], check=True)
+    Path(sentinel).write_text("from-host\n")
+    return sentinel
+
+
 def test_delete_session_unmounts_bind_before_rm():
     if not integration_enabled():
         return
@@ -485,9 +537,7 @@ def test_delete_session_unmounts_bind_before_rm():
         return
 
     src_dir = "/tmp/_capybara_bind_src"
-    sentinel = os.path.join(src_dir, "host-file")
-    subprocess.run(["mkdir", "-p", src_dir], check=True)
-    Path(sentinel).write_text("from-host\n")
+    sentinel = _setup_bind_source(src_dir)
 
     proc = start_supervisor()
     try:
@@ -519,6 +569,49 @@ def test_delete_session_unmounts_bind_before_rm():
             ["umount", "/sessions/bindmnt/mnt/data"], check=False, capture_output=True
         )
         subprocess.run(["rm", "-rf", "/sessions/bindmnt"], check=False)
+        subprocess.run(["rm", "-rf", src_dir], check=False)
+        if proc.poll() is None:
+            shutdown(proc)
+
+
+def test_delete_session_unmounts_escaped_mount_target():
+    if not integration_enabled():
+        return
+    if not _can_bind_mount():
+        return
+
+    src_dir = "/tmp/_capybara_space_bind_src"
+    sentinel = _setup_bind_source(src_dir)
+
+    proc = start_supervisor()
+    try:
+        send_request(
+            proc,
+            "create_session",
+            {"session_id": "spacebind"},
+            request_id="create",
+        )
+        target = _bind_into_session("spacebind", "My Dir", src_dir)
+        with open("/proc/mounts") as f:
+            assert "/sessions/spacebind/mnt/My\\040Dir" in f.read()
+
+        deleted = send_request(
+            proc,
+            "delete_session",
+            {"session_id": "spacebind"},
+            request_id="delete",
+        )
+        assert deleted == {"id": "delete", "result": {"ok": True}}
+        assert not Path("/sessions/spacebind").exists()
+        assert Path(sentinel).exists()
+        assert Path(sentinel).read_text() == "from-host\n"
+    finally:
+        subprocess.run(
+            ["umount", "/sessions/spacebind/mnt/My Dir"],
+            check=False,
+            capture_output=True,
+        )
+        subprocess.run(["rm", "-rf", "/sessions/spacebind"], check=False)
         subprocess.run(["rm", "-rf", src_dir], check=False)
         if proc.poll() is None:
             shutdown(proc)

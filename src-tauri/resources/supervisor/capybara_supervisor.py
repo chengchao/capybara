@@ -5,6 +5,7 @@ import json
 import os
 import re
 import signal
+import stat
 import subprocess
 import sys
 import time
@@ -39,6 +40,21 @@ def session_root(session_id: str) -> str:
 
 def run(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
     return subprocess.run(argv, text=True, capture_output=True, check=True, **kwargs)
+
+
+def ensure_directory(path: str) -> None:
+    try:
+        st = os.lstat(path)
+    except FileNotFoundError:
+        run(["mkdir", "-p", path])
+        return
+    if stat.S_ISLNK(st.st_mode) or not stat.S_ISDIR(st.st_mode):
+        raise RuntimeError(f"{path} must be a directory")
+
+
+def chmod_chown(path: str, owner: str, mode: str) -> None:
+    run(["chown", owner, path])
+    run(["chmod", mode, path])
 
 
 def uid_for_user(user: str) -> int:
@@ -143,6 +159,14 @@ def terminate_session_command(proc: subprocess.Popen[str], user: str) -> tuple[s
     return collect_process_output(proc)
 
 
+_MOUNT_OCTAL_ESCAPE = re.compile(r"\\([0-7]{3})")
+
+
+def decode_mount_field(value: str) -> str:
+    """Decode kernel mangle_path escapes from /proc/mounts (e.g. ``\\040`` for space)."""
+    return _MOUNT_OCTAL_ESCAPE.sub(lambda m: chr(int(m.group(1), 8)), value)
+
+
 def handle_ping(_params: JsonDict) -> JsonDict:
     return {"ok": True}
 
@@ -157,7 +181,11 @@ def handle_create_session(params: JsonDict) -> JsonDict:
     home = os.path.join(root, "home")
     work = os.path.join(root, "work")
     mnt = os.path.join(root, "mnt")
-    run(["mkdir", "-p", home, work, mnt])
+    ensure_directory(root)
+    chmod_chown(root, "root:root", "755")
+    ensure_directory(home)
+    ensure_directory(work)
+    ensure_directory(mnt)
 
     if not user_exists(user):
         run(
@@ -172,17 +200,13 @@ def handle_create_session(params: JsonDict) -> JsonDict:
             ]
         )
 
-    # Session root is private to the user (and root). home/ and work/ are the
-    # agent's writable surface. mnt/ stays root-owned: it is the bind-mount
-    # catalog that attach_dir (PR-C) populates, and root-ownership prevents
-    # the agent from planting symlinks the supervisor would later resolve
-    # through when calling mount --bind.
-    run(["chown", f"{user}:{user}", root])
-    run(["chmod", "700", root])
-    run(["chown", "-R", f"{user}:{user}", home])
-    run(["chown", "-R", f"{user}:{user}", work])
-    run(["chown", "root:root", mnt])
-    run(["chmod", "755", mnt])
+    # The session root and mnt/ catalog stay root-owned so the agent cannot
+    # remove mnt/ and replace it with a symlink before the supervisor binds
+    # approved host directories into it. home/ and work/ are the agent's
+    # writable surfaces.
+    chmod_chown(home, f"{user}:{user}", "700")
+    chmod_chown(work, f"{user}:{user}", "700")
+    chmod_chown(mnt, "root:root", "755")
     return {"sessionRoot": root, "user": user}
 
 
@@ -200,12 +224,12 @@ def unmount_session_mounts(root: str) -> None:
                 fields = line.split()
                 if len(fields) < 2:
                     continue
-                target = fields[1]
+                target = decode_mount_field(fields[1])
                 if Path(target).is_relative_to(mnt_root):
                     targets.append(target)
     except OSError:
         return
-    for target in reversed(targets):
+    for target in sorted(targets, key=len, reverse=True):
         result = subprocess.run(["umount", "--", target], text=True, capture_output=True)
         if result.returncode != 0:
             raise RuntimeError(
