@@ -315,3 +315,261 @@ def test_delete_session_removes_user_with_live_process():
             except Exception:
                 pass
             shutdown(proc)
+
+
+def _stat_owner_mode(path):
+    st = os.stat(path)
+    return st.st_uid, st.st_gid, st.st_mode & 0o7777
+
+
+def test_create_session_leaves_mnt_root_owned():
+    if not integration_enabled():
+        return
+
+    proc = start_supervisor()
+    try:
+        send_request(
+            proc,
+            "create_session",
+            {"session_id": "owners"},
+            request_id="create",
+        )
+        user_uid = int(subprocess.check_output(["id", "-u", "capybara_owners"], text=True).strip())
+
+        home_uid, _, _ = _stat_owner_mode("/sessions/owners/home")
+        work_uid, _, _ = _stat_owner_mode("/sessions/owners/work")
+        mnt_uid, mnt_gid, mnt_mode = _stat_owner_mode("/sessions/owners/mnt")
+
+        assert home_uid == user_uid, f"home/ should be owned by session user, got uid {home_uid}"
+        assert work_uid == user_uid, f"work/ should be owned by session user, got uid {work_uid}"
+        assert mnt_uid == 0, f"mnt/ should be root-owned, got uid {mnt_uid}"
+        assert mnt_gid == 0, f"mnt/ should be root-grouped, got gid {mnt_gid}"
+        assert mnt_mode == 0o755, f"mnt/ should be 0755, got {oct(mnt_mode)}"
+    finally:
+        if proc.poll() is None:
+            try:
+                send_request(proc, "delete_session", {"session_id": "owners"}, request_id="cleanup")
+            except Exception:
+                pass
+            shutdown(proc)
+
+
+def test_session_user_cannot_create_entries_in_mnt():
+    if not integration_enabled():
+        return
+
+    proc = start_supervisor()
+    try:
+        send_request(
+            proc,
+            "create_session",
+            {"session_id": "nowrite"},
+            request_id="create",
+        )
+
+        # Listing mnt/ is allowed — agent should see the (empty) catalog.
+        listed = send_request(
+            proc,
+            "run_as_session",
+            {
+                "session_id": "nowrite",
+                "cwd": "/sessions/nowrite/work",
+                "command": "ls /sessions/nowrite/mnt",
+                "timeout_ms": 5000,
+            },
+            request_id="ls",
+        )
+        assert listed["result"]["exitCode"] == 0
+
+        # Creating an entry must fail — root-owned 0755 denies write to "other".
+        wrote = send_request(
+            proc,
+            "run_as_session",
+            {
+                "session_id": "nowrite",
+                "cwd": "/sessions/nowrite/work",
+                "command": "touch /sessions/nowrite/mnt/foo",
+                "timeout_ms": 5000,
+            },
+            request_id="touch",
+        )
+        assert wrote["result"]["exitCode"] != 0
+        assert "Permission denied" in wrote["result"]["stderr"]
+
+        # Symlink attempt also fails.
+        linked = send_request(
+            proc,
+            "run_as_session",
+            {
+                "session_id": "nowrite",
+                "cwd": "/sessions/nowrite/work",
+                "command": "ln -s /etc /sessions/nowrite/mnt/Hijack",
+                "timeout_ms": 5000,
+            },
+            request_id="ln",
+        )
+        assert linked["result"]["exitCode"] != 0
+        assert "Permission denied" in linked["result"]["stderr"]
+
+        # Sanity: the agent CAN write to its own work/ surface.
+        ok = send_request(
+            proc,
+            "run_as_session",
+            {
+                "session_id": "nowrite",
+                "cwd": "/sessions/nowrite/work",
+                "command": "touch /sessions/nowrite/work/agent-owned",
+                "timeout_ms": 5000,
+            },
+            request_id="work-write",
+        )
+        assert ok["result"]["exitCode"] == 0
+    finally:
+        if proc.poll() is None:
+            try:
+                send_request(proc, "delete_session", {"session_id": "nowrite"}, request_id="cleanup")
+            except Exception:
+                pass
+            shutdown(proc)
+
+
+def _can_bind_mount():
+    src = "/tmp/_capybara_bind_probe_src"
+    tgt = "/tmp/_capybara_bind_probe_tgt"
+    subprocess.run(["mkdir", "-p", src, tgt], check=True)
+    try:
+        probe = subprocess.run(
+            ["mount", "--bind", src, tgt], text=True, capture_output=True
+        )
+        if probe.returncode != 0:
+            return False
+        subprocess.run(["umount", tgt], check=False)
+        return True
+    finally:
+        subprocess.run(["rm", "-rf", src, tgt], check=False)
+
+
+def test_delete_session_unmounts_bind_before_rm():
+    if not integration_enabled():
+        return
+    if not _can_bind_mount():
+        # Container lacks CAP_SYS_ADMIN; this safety test cannot run here.
+        # Run with `docker run --cap-add=SYS_ADMIN` (already wired in
+        # `bun run test:supervisor`) to exercise it.
+        return
+
+    src_dir = "/tmp/_capybara_bind_src"
+    sentinel = os.path.join(src_dir, "host-file")
+    subprocess.run(["mkdir", "-p", src_dir], check=True)
+    Path(sentinel).write_text("from-host\n")
+
+    proc = start_supervisor()
+    try:
+        send_request(
+            proc,
+            "create_session",
+            {"session_id": "bindmnt"},
+            request_id="create",
+        )
+        target = "/sessions/bindmnt/mnt/data"
+        subprocess.run(["mkdir", "-p", target], check=True)
+        subprocess.run(["mount", "--bind", src_dir, target], check=True)
+
+        # Sanity: the bind shows the host file inside the session.
+        assert Path(target, "host-file").exists()
+
+        deleted = send_request(
+            proc,
+            "delete_session",
+            {"session_id": "bindmnt"},
+            request_id="delete",
+        )
+        assert deleted == {"id": "delete", "result": {"ok": True}}
+
+        # Session root is gone.
+        assert not Path("/sessions/bindmnt").exists()
+        # The mount has been unmounted.
+        with open("/proc/mounts") as f:
+            assert target not in f.read()
+        # Crucially, the original host file is intact — rm -rf did NOT
+        # follow the bind into the source.
+        assert Path(sentinel).exists()
+        assert Path(sentinel).read_text() == "from-host\n"
+    finally:
+        # Belt-and-suspenders: if anything went sideways, force-clean the
+        # mount and source. delete_session should already have done the
+        # umount and rm -rf in the success path.
+        subprocess.run(
+            ["umount", "/sessions/bindmnt/mnt/data"], check=False, capture_output=True
+        )
+        subprocess.run(["rm", "-rf", "/sessions/bindmnt"], check=False)
+        subprocess.run(["rm", "-rf", src_dir], check=False)
+        if proc.poll() is None:
+            shutdown(proc)
+
+
+def test_delete_session_raises_if_unmount_fails():
+    if not integration_enabled():
+        return
+    if not _can_bind_mount():
+        return
+
+    src_dir = "/tmp/_capybara_busy_src"
+    subprocess.run(["mkdir", "-p", src_dir], check=True)
+
+    proc = start_supervisor()
+    busy_proc = None
+    try:
+        send_request(
+            proc,
+            "create_session",
+            {"session_id": "busymnt"},
+            request_id="create",
+        )
+        target = "/sessions/busymnt/mnt/busy"
+        subprocess.run(["mkdir", "-p", target], check=True)
+        subprocess.run(["mount", "--bind", src_dir, target], check=True)
+
+        # Hold the mount busy from outside the session — this simulates a
+        # supervisor bug where someone-other-than-the-session-user pins
+        # the mount. A `umount` would normally fail with EBUSY.
+        busy_proc = subprocess.Popen(
+            ["sleep", "300"],
+            cwd=target,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        # Give it a moment to settle into the cwd.
+        import time
+
+        time.sleep(0.1)
+
+        deleted = send_request(
+            proc,
+            "delete_session",
+            {"session_id": "busymnt"},
+            request_id="delete",
+        )
+        # Must surface the umount failure rather than fall through to rm -rf
+        # (which would recurse INTO the still-mounted bind).
+        assert "error" in deleted, f"expected error, got {deleted}"
+        assert "failed to unmount" in deleted["error"]["message"]
+
+        # Session root must NOT be removed — the host source files are
+        # still reachable through the bind, so rm -rf would have been a
+        # data-loss event.
+        assert Path("/sessions/busymnt").exists()
+    finally:
+        if busy_proc is not None and busy_proc.poll() is None:
+            busy_proc.kill()
+            busy_proc.wait()
+        # Manual cleanup since delete_session was supposed to fail.
+        subprocess.run(
+            ["umount", "/sessions/busymnt/mnt/busy"],
+            check=False,
+            capture_output=True,
+        )
+        subprocess.run(["rm", "-rf", "/sessions/busymnt"], check=False)
+        subprocess.run(["rm", "-rf", src_dir], check=False)
+        if proc.poll() is None:
+            shutdown(proc)

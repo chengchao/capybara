@@ -154,15 +154,10 @@ def handle_create_session(params: JsonDict) -> JsonDict:
     root = session_root(session_id)
     user = user_for_session(session_id)
 
-    run(
-        [
-            "mkdir",
-            "-p",
-            os.path.join(root, "home"),
-            os.path.join(root, "work"),
-            os.path.join(root, "mnt"),
-        ]
-    )
+    home = os.path.join(root, "home")
+    work = os.path.join(root, "work")
+    mnt = os.path.join(root, "mnt")
+    run(["mkdir", "-p", home, work, mnt])
 
     if not user_exists(user):
         run(
@@ -170,16 +165,49 @@ def handle_create_session(params: JsonDict) -> JsonDict:
                 "useradd",
                 "--no-create-home",
                 "--home-dir",
-                os.path.join(root, "home"),
+                home,
                 "--shell",
                 "/bin/bash",
                 user,
             ]
         )
 
-    run(["chown", "-R", f"{user}:{user}", root])
+    # Session root is private to the user (and root). home/ and work/ are the
+    # agent's writable surface. mnt/ stays root-owned: it is the bind-mount
+    # catalog that attach_dir (PR-C) populates, and root-ownership prevents
+    # the agent from planting symlinks the supervisor would later resolve
+    # through when calling mount --bind.
+    run(["chown", f"{user}:{user}", root])
     run(["chmod", "700", root])
+    run(["chown", "-R", f"{user}:{user}", home])
+    run(["chown", "-R", f"{user}:{user}", work])
+    run(["chown", "root:root", mnt])
+    run(["chmod", "755", mnt])
     return {"sessionRoot": root, "user": user}
+
+
+def unmount_session_mounts(root: str) -> None:
+    # Unmount everything under <root>/mnt/ before the caller rm -rf's <root>.
+    # Without this, rm -rf would recurse INTO each bind mount and delete the
+    # host source files. /proc/mounts is in mount order, so we unmount in
+    # reverse to handle nested mounts. A failed umount is fatal — letting
+    # delete_session proceed would lose host data.
+    mnt_prefix = os.path.join(root, "mnt") + os.sep
+    targets: list[str] = []
+    try:
+        with open("/proc/mounts") as f:
+            for line in f:
+                fields = line.split()
+                if len(fields) >= 2 and fields[1].startswith(mnt_prefix):
+                    targets.append(fields[1])
+    except OSError:
+        return
+    for target in reversed(targets):
+        result = subprocess.run(["umount", "--", target], text=True, capture_output=True)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"failed to unmount {target}: {result.stderr.strip() or 'unknown error'}"
+            )
 
 
 def handle_delete_session(params: JsonDict) -> JsonDict:
@@ -190,6 +218,7 @@ def handle_delete_session(params: JsonDict) -> JsonDict:
     user = user_for_session(session_id)
 
     kill_session_processes(user)
+    unmount_session_mounts(root)
 
     if user_exists(user):
         userdel = subprocess.run(["userdel", user], text=True, capture_output=True)
