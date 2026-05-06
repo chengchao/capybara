@@ -2,6 +2,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 
@@ -367,7 +368,6 @@ def test_session_user_cannot_create_entries_in_mnt():
             request_id="create",
         )
 
-        # Listing mnt/ is allowed — agent should see the (empty) catalog.
         listed = send_request(
             proc,
             "run_as_session",
@@ -381,7 +381,6 @@ def test_session_user_cannot_create_entries_in_mnt():
         )
         assert listed["result"]["exitCode"] == 0
 
-        # Creating an entry must fail — root-owned 0755 denies write to "other".
         wrote = send_request(
             proc,
             "run_as_session",
@@ -396,7 +395,6 @@ def test_session_user_cannot_create_entries_in_mnt():
         assert wrote["result"]["exitCode"] != 0
         assert "Permission denied" in wrote["result"]["stderr"]
 
-        # Symlink attempt also fails.
         linked = send_request(
             proc,
             "run_as_session",
@@ -411,7 +409,6 @@ def test_session_user_cannot_create_entries_in_mnt():
         assert linked["result"]["exitCode"] != 0
         assert "Permission denied" in linked["result"]["stderr"]
 
-        # Sanity: the agent CAN write to its own work/ surface.
         ok = send_request(
             proc,
             "run_as_session",
@@ -449,6 +446,13 @@ def _can_bind_mount():
         subprocess.run(["rm", "-rf", src, tgt], check=False)
 
 
+def _bind_into_session(session_id, mnt_name, src_dir):
+    target = f"/sessions/{session_id}/mnt/{mnt_name}"
+    subprocess.run(["mkdir", "-p", target], check=True)
+    subprocess.run(["mount", "--bind", src_dir, target], check=True)
+    return target
+
+
 def test_delete_session_unmounts_bind_before_rm():
     if not integration_enabled():
         return
@@ -471,11 +475,7 @@ def test_delete_session_unmounts_bind_before_rm():
             {"session_id": "bindmnt"},
             request_id="create",
         )
-        target = "/sessions/bindmnt/mnt/data"
-        subprocess.run(["mkdir", "-p", target], check=True)
-        subprocess.run(["mount", "--bind", src_dir, target], check=True)
-
-        # Sanity: the bind shows the host file inside the session.
+        target = _bind_into_session("bindmnt", "data", src_dir)
         assert Path(target, "host-file").exists()
 
         deleted = send_request(
@@ -485,20 +485,14 @@ def test_delete_session_unmounts_bind_before_rm():
             request_id="delete",
         )
         assert deleted == {"id": "delete", "result": {"ok": True}}
-
-        # Session root is gone.
         assert not Path("/sessions/bindmnt").exists()
-        # The mount has been unmounted.
         with open("/proc/mounts") as f:
             assert target not in f.read()
-        # Crucially, the original host file is intact — rm -rf did NOT
-        # follow the bind into the source.
+        # rm -rf must NOT have followed the bind into the host source.
         assert Path(sentinel).exists()
         assert Path(sentinel).read_text() == "from-host\n"
     finally:
-        # Belt-and-suspenders: if anything went sideways, force-clean the
-        # mount and source. delete_session should already have done the
-        # umount and rm -rf in the success path.
+        # Force-clean if the success path didn't run (test failed or aborted).
         subprocess.run(
             ["umount", "/sessions/bindmnt/mnt/data"], check=False, capture_output=True
         )
@@ -526,22 +520,16 @@ def test_delete_session_raises_if_unmount_fails():
             {"session_id": "busymnt"},
             request_id="create",
         )
-        target = "/sessions/busymnt/mnt/busy"
-        subprocess.run(["mkdir", "-p", target], check=True)
-        subprocess.run(["mount", "--bind", src_dir, target], check=True)
+        target = _bind_into_session("busymnt", "busy", src_dir)
 
-        # Hold the mount busy from outside the session — this simulates a
-        # supervisor bug where someone-other-than-the-session-user pins
-        # the mount. A `umount` would normally fail with EBUSY.
+        # Hold the mount busy from outside the session so umount returns EBUSY,
+        # exercising the "umount failed → don't fall through to rm -rf" branch.
         busy_proc = subprocess.Popen(
             ["sleep", "300"],
             cwd=target,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        # Give it a moment to settle into the cwd.
-        import time
-
         time.sleep(0.1)
 
         deleted = send_request(
@@ -550,20 +538,14 @@ def test_delete_session_raises_if_unmount_fails():
             {"session_id": "busymnt"},
             request_id="delete",
         )
-        # Must surface the umount failure rather than fall through to rm -rf
-        # (which would recurse INTO the still-mounted bind).
         assert "error" in deleted, f"expected error, got {deleted}"
         assert "failed to unmount" in deleted["error"]["message"]
-
-        # Session root must NOT be removed — the host source files are
-        # still reachable through the bind, so rm -rf would have been a
-        # data-loss event.
+        # Session root must survive — rm -rf would have been a data-loss event.
         assert Path("/sessions/busymnt").exists()
     finally:
         if busy_proc is not None and busy_proc.poll() is None:
             busy_proc.kill()
             busy_proc.wait()
-        # Manual cleanup since delete_session was supposed to fail.
         subprocess.run(
             ["umount", "/sessions/busymnt/mnt/busy"],
             check=False,

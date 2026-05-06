@@ -192,14 +192,17 @@ def unmount_session_mounts(root: str) -> None:
     # host source files. /proc/mounts is in mount order, so we unmount in
     # reverse to handle nested mounts. A failed umount is fatal — letting
     # delete_session proceed would lose host data.
-    mnt_prefix = os.path.join(root, "mnt") + os.sep
+    mnt_root = Path(root) / "mnt"
     targets: list[str] = []
     try:
         with open("/proc/mounts") as f:
             for line in f:
                 fields = line.split()
-                if len(fields) >= 2 and fields[1].startswith(mnt_prefix):
-                    targets.append(fields[1])
+                if len(fields) < 2:
+                    continue
+                target = fields[1]
+                if Path(target).is_relative_to(mnt_root):
+                    targets.append(target)
     except OSError:
         return
     for target in reversed(targets):
