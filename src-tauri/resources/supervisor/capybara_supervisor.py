@@ -33,6 +33,11 @@ def user_for_session(session_id: str) -> str:
     return f"capybara_{session_id}"
 
 
+def group_for_session(session_id: str) -> str:
+    validate_session_id(session_id)
+    return f"capybara_{session_id}"
+
+
 def session_root(session_id: str) -> str:
     validate_session_id(session_id)
     return os.path.join(SESSIONS_ROOT, session_id)
@@ -59,6 +64,10 @@ def chmod_chown(path: str, owner: str, mode: str) -> None:
 
 def uid_for_user(user: str) -> int:
     return int(subprocess.check_output(["id", "-u", user], text=True).strip())
+
+
+def group_exists(group: str) -> bool:
+    return subprocess.run(["getent", "group", group], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
 
 
 def user_exists(user: str) -> bool:
@@ -177,21 +186,25 @@ def handle_create_session(params: JsonDict) -> JsonDict:
         raise ValueError("session_id is required")
     root = session_root(session_id)
     user = user_for_session(session_id)
+    group = group_for_session(session_id)
 
     home = os.path.join(root, "home")
     work = os.path.join(root, "work")
     mnt = os.path.join(root, "mnt")
     ensure_directory(root)
-    chmod_chown(root, "root:root", "755")
     ensure_directory(home)
     ensure_directory(work)
     ensure_directory(mnt)
+
+    run(["groupadd", "--force", group])
 
     if not user_exists(user):
         run(
             [
                 "useradd",
                 "--no-create-home",
+                "--gid",
+                group,
                 "--home-dir",
                 home,
                 "--shell",
@@ -199,14 +212,17 @@ def handle_create_session(params: JsonDict) -> JsonDict:
                 user,
             ]
         )
+    else:
+        run(["usermod", "--gid", group, user])
 
     # The session root and mnt/ catalog stay root-owned so the agent cannot
     # remove mnt/ and replace it with a symlink before the supervisor binds
-    # approved host directories into it. home/ and work/ are the agent's
-    # writable surfaces.
+    # approved host directories into it. The per-session group lets only this
+    # session traverse its root and mount catalog; other session users cannot.
+    chmod_chown(root, f"root:{group}", "750")
     chmod_chown(home, f"{user}:{user}", "700")
     chmod_chown(work, f"{user}:{user}", "700")
-    chmod_chown(mnt, "root:root", "755")
+    chmod_chown(mnt, f"root:{group}", "750")
     return {"sessionRoot": root, "user": user}
 
 
@@ -243,6 +259,7 @@ def handle_delete_session(params: JsonDict) -> JsonDict:
         raise ValueError("session_id is required")
     root = session_root(session_id)
     user = user_for_session(session_id)
+    group = group_for_session(session_id)
 
     kill_session_processes(user)
     unmount_session_mounts(root)
@@ -251,6 +268,11 @@ def handle_delete_session(params: JsonDict) -> JsonDict:
         userdel = subprocess.run(["userdel", user], text=True, capture_output=True)
         if userdel.returncode != 0 and user_exists(user):
             raise RuntimeError(f"failed to delete session user {user}: {userdel.stderr.strip()}")
+
+    if group_exists(group):
+        groupdel = subprocess.run(["groupdel", group], text=True, capture_output=True)
+        if groupdel.returncode != 0 and group_exists(group):
+            raise RuntimeError(f"failed to delete session group {group}: {groupdel.stderr.strip()}")
 
     run(["rm", "-rf", root])
     return {"ok": True}

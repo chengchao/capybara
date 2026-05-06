@@ -1,3 +1,4 @@
+import grp
 import json
 import os
 import subprocess
@@ -177,6 +178,7 @@ def test_session_lifecycle_and_cwd_containment():
         assert deleted == {"id": "delete", "result": {"ok": True}}
         assert not Path("/sessions/itest_ok-1").exists()
         assert subprocess.run(["id", "-u", "capybara_itest_ok-1"], capture_output=True).returncode != 0
+        assert subprocess.run(["getent", "group", "capybara_itest_ok-1"], capture_output=True).returncode != 0
     finally:
         if proc.poll() is None:
             try:
@@ -323,6 +325,10 @@ def _stat_owner_mode(path):
     return st.st_uid, st.st_gid, st.st_mode & 0o7777
 
 
+def _gid_for_group(group):
+    return grp.getgrnam(group).gr_gid
+
+
 def test_create_session_leaves_mnt_root_owned():
     if not integration_enabled():
         return
@@ -336,6 +342,7 @@ def test_create_session_leaves_mnt_root_owned():
             request_id="create",
         )
         user_uid = int(subprocess.check_output(["id", "-u", "capybara_owners"], text=True).strip())
+        group_gid = _gid_for_group("capybara_owners")
 
         root_uid, root_gid, root_mode = _stat_owner_mode("/sessions/owners")
         home_uid, _, _ = _stat_owner_mode("/sessions/owners/home")
@@ -343,19 +350,64 @@ def test_create_session_leaves_mnt_root_owned():
         mnt_uid, mnt_gid, mnt_mode = _stat_owner_mode("/sessions/owners/mnt")
 
         assert root_uid == 0, f"session root should be root-owned, got uid {root_uid}"
-        assert root_gid == 0, f"session root should be root-grouped, got gid {root_gid}"
-        assert root_mode == 0o755, f"session root should be 0755, got {oct(root_mode)}"
+        assert root_gid == group_gid, f"session root should use session group, got gid {root_gid}"
+        assert root_mode == 0o750, f"session root should be 0750, got {oct(root_mode)}"
         assert home_uid == user_uid, f"home/ should be owned by session user, got uid {home_uid}"
         assert work_uid == user_uid, f"work/ should be owned by session user, got uid {work_uid}"
         assert mnt_uid == 0, f"mnt/ should be root-owned, got uid {mnt_uid}"
-        assert mnt_gid == 0, f"mnt/ should be root-grouped, got gid {mnt_gid}"
-        assert mnt_mode == 0o755, f"mnt/ should be 0755, got {oct(mnt_mode)}"
+        assert mnt_gid == group_gid, f"mnt/ should use session group, got gid {mnt_gid}"
+        assert mnt_mode == 0o750, f"mnt/ should be 0750, got {oct(mnt_mode)}"
     finally:
         if proc.poll() is None:
             try:
                 send_request(proc, "delete_session", {"session_id": "owners"}, request_id="cleanup")
             except Exception:
                 pass
+            shutdown(proc)
+
+
+def test_other_session_user_cannot_traverse_victim_mnt():
+    if not integration_enabled():
+        return
+
+    proc = start_supervisor()
+    try:
+        send_request(proc, "create_session", {"session_id": "victim"}, request_id="victim")
+        send_request(proc, "create_session", {"session_id": "outsider"}, request_id="outsider")
+
+        own = send_request(
+            proc,
+            "run_as_session",
+            {
+                "session_id": "victim",
+                "cwd": "/sessions/victim/work",
+                "command": "ls /sessions/victim/mnt",
+                "timeout_ms": 5000,
+            },
+            request_id="own",
+        )
+        assert own["result"]["exitCode"] == 0
+
+        cross = send_request(
+            proc,
+            "run_as_session",
+            {
+                "session_id": "outsider",
+                "cwd": "/sessions/outsider/work",
+                "command": "ls /sessions/victim/mnt",
+                "timeout_ms": 5000,
+            },
+            request_id="cross",
+        )
+        assert cross["result"]["exitCode"] != 0
+        assert "Permission denied" in cross["result"]["stderr"]
+    finally:
+        if proc.poll() is None:
+            for session_id in ["victim", "outsider"]:
+                try:
+                    send_request(proc, "delete_session", {"session_id": session_id}, request_id=f"cleanup-{session_id}")
+                except Exception:
+                    pass
             shutdown(proc)
 
 
