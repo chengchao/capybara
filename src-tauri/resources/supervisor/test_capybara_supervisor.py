@@ -430,7 +430,13 @@ def test_session_user_cannot_create_entries_in_mnt():
             shutdown(proc)
 
 
+_BIND_MOUNT_SUPPORTED: bool | None = None
+
+
 def _can_bind_mount():
+    global _BIND_MOUNT_SUPPORTED
+    if _BIND_MOUNT_SUPPORTED is not None:
+        return _BIND_MOUNT_SUPPORTED
     src = "/tmp/_capybara_bind_probe_src"
     tgt = "/tmp/_capybara_bind_probe_tgt"
     subprocess.run(["mkdir", "-p", src, tgt], check=True)
@@ -439,11 +445,27 @@ def _can_bind_mount():
             ["mount", "--bind", src, tgt], text=True, capture_output=True
         )
         if probe.returncode != 0:
+            _BIND_MOUNT_SUPPORTED = False
             return False
         subprocess.run(["umount", tgt], check=False)
+        _BIND_MOUNT_SUPPORTED = True
         return True
     finally:
         subprocess.run(["rm", "-rf", src, tgt], check=False)
+
+
+def _wait_for_cwd(pid, target, timeout=2.0):
+    deadline = time.monotonic() + timeout
+    target_real = os.path.realpath(target)
+    while time.monotonic() < deadline:
+        try:
+            actual = os.readlink(f"/proc/{pid}/cwd")
+        except OSError:
+            actual = ""
+        if actual == target_real:
+            return True
+        time.sleep(0.01)
+    return False
 
 
 def _bind_into_session(session_id, mnt_name, src_dir):
@@ -530,7 +552,7 @@ def test_delete_session_raises_if_unmount_fails():
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        time.sleep(0.1)
+        assert _wait_for_cwd(busy_proc.pid, target), "busy_proc never entered the bind target"
 
         deleted = send_request(
             proc,
