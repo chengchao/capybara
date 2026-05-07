@@ -243,8 +243,10 @@ def unmount_session_mounts(root: str) -> None:
                 target = decode_mount_field(fields[1])
                 if Path(target).is_relative_to(mnt_root):
                     targets.append(target)
-    except OSError:
-        return
+    except OSError as exc:
+        # Fail closed: if we can't read /proc/mounts we don't know what to
+        # unmount, so refuse to fall through to the caller's `rm -rf root`.
+        raise RuntimeError(f"failed to enumerate mounts: {exc}") from exc
     for target in sorted(targets, key=len, reverse=True):
         result = subprocess.run(["umount", "--", target], text=True, capture_output=True)
         if result.returncode != 0:

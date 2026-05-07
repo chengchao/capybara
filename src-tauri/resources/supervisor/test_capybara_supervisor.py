@@ -1,4 +1,5 @@
 import grp
+import importlib.util
 import json
 import os
 import subprocess
@@ -6,8 +7,16 @@ import sys
 import time
 from pathlib import Path
 
+import pytest
+
 
 SCRIPT = Path(__file__).with_name("capybara_supervisor.py")
+
+_SUPERVISOR_SPEC = importlib.util.spec_from_file_location("capybara_supervisor", SCRIPT)
+assert _SUPERVISOR_SPEC is not None
+capybara_supervisor = importlib.util.module_from_spec(_SUPERVISOR_SPEC)
+assert _SUPERVISOR_SPEC.loader is not None
+_SUPERVISOR_SPEC.loader.exec_module(capybara_supervisor)
 
 
 def start_supervisor():
@@ -525,6 +534,15 @@ def test_create_session_rejects_existing_mnt_symlink():
         subprocess.run(["rm", "-rf", "/sessions/badcatalog"], check=False)
         if proc.poll() is None:
             shutdown(proc)
+
+
+def test_unmount_session_mounts_fails_closed_when_mounts_unavailable(monkeypatch):
+    def raise_os_error(*_args, **_kwargs):
+        raise OSError("proc unavailable")
+
+    monkeypatch.setattr(capybara_supervisor, "open", raise_os_error, raising=False)
+    with pytest.raises(RuntimeError, match="failed to enumerate mounts"):
+        capybara_supervisor.unmount_session_mounts("/sessions/missingproc")
 
 
 _BIND_MOUNT_SUPPORTED: bool | None = None
