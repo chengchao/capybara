@@ -25,6 +25,7 @@ ssh:
   forwardAgent: false
 mounts:
   - location: \"~\"
+    mountPoint: \"/host-home\"
     writable: true
 ";
 
@@ -107,13 +108,9 @@ pub async fn ensure_vm(app: &AppHandle) -> Result<(), VmError> {
             let yaml_path_str = yaml_path
                 .to_str()
                 .expect("LIMA_HOME path under home_dir is utf-8 on macOS");
-            // The YAML declares a single `~` mount, writable. This intentionally uses the
-            // same `location: "~"` string as the inherited read-only mount from
-            // `template:_default/mounts` so Lima's merger updates the attributes in place
-            // (writable=true wins) instead of producing two entries pointing at the same
-            // target. The supervisor (PR-B) bounds what each session sees inside that
-            // mount; the host (later PRs) owns the policy of which subdirs to expose to
-            // which session.
+            // The raw host-home mount is a supervisor source path, not a sandbox path.
+            // Session commands run through bubblewrap and only see approved subdirs
+            // rebound into /mnt/<name>.
             run_limactl(
                 &paths,
                 &[
@@ -135,6 +132,7 @@ pub async fn ensure_vm(app: &AppHandle) -> Result<(), VmError> {
     }
 
     smoke_test_host_mount(&paths).await?;
+    ensure_bwrap(&paths).await?;
     install_supervisor(&paths).await?;
     smoke_test_supervisor(&paths).await?;
 
@@ -227,17 +225,13 @@ async fn run_limactl(paths: &LimaPaths, args: &[&str]) -> Result<String, VmError
 
 async fn smoke_test_host_mount(paths: &LimaPaths) -> Result<(), VmError> {
     eprintln!("vm: verifying host home mount...");
-    let host_home_str = paths
-        .host_home
-        .to_str()
-        .expect("host home path is utf-8 on macOS");
-    // A working virtiofs mount makes the host home visible at the same path; without it
-    // (stale `--mount-none` instance) the path is missing and `test -d` exits non-zero.
+    // A working virtiofs mount makes the host home visible at /host-home; without it
+    // (stale instance config) the path is missing and `test -d` exits non-zero.
     // Distinguish a non-zero exit (mount truly missing) from other failures (limactl
     // crash, ssh hiccup) so unrelated breakage isn't misreported as a mount problem.
     match run_limactl(
         paths,
-        &["shell", INSTANCE_NAME, "--", "test", "-d", host_home_str],
+        &["shell", INSTANCE_NAME, "--", "test", "-d", "/host-home"],
     )
     .await
     {
@@ -291,6 +285,24 @@ async fn install_supervisor(paths: &LimaPaths) -> Result<(), VmError> {
     Ok(())
 }
 
+async fn ensure_bwrap(paths: &LimaPaths) -> Result<(), VmError> {
+    eprintln!("vm: ensuring bubblewrap...");
+    run_limactl(
+        paths,
+        &[
+            "shell",
+            INSTANCE_NAME,
+            "--",
+            "sh",
+            "-lc",
+            "command -v bwrap >/dev/null || (sudo apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y bubblewrap)",
+        ],
+    )
+    .await?;
+    run_limactl(paths, &["shell", INSTANCE_NAME, "--", "bwrap", "--version"]).await?;
+    Ok(())
+}
+
 async fn smoke_test_supervisor(paths: &LimaPaths) -> Result<(), VmError> {
     eprintln!("vm: testing supervisor...");
     let mut client = SupervisorClient::start(paths).await?;
@@ -304,7 +316,7 @@ async fn smoke_test_supervisor(paths: &LimaPaths) -> Result<(), VmError> {
                 "run_as_session",
                 json!({
                     "session_id": "smoke_session",
-                    "cwd": "/sessions/smoke_session/work",
+                    "cwd": "/workspace",
                     "command": "id -un && pwd",
                     "timeout_ms": 5000,
                 }),
