@@ -1,10 +1,11 @@
 # Match the production Lima cloud image (Ubuntu) so the integration suite
 # exercises the same shadow-utils/sudo/PAM behavior that ships in the VM.
 FROM ubuntu:24.04
+ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-         sudo python3 python3-pytest \
+         bubblewrap sudo python3 python3-pytest \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

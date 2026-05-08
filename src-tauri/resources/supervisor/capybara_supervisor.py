@@ -15,7 +15,11 @@ from typing import Any, Dict, cast
 
 
 SESSION_RE = re.compile(r"^[a-z][a-z0-9_-]{0,22}$")
-SESSIONS_ROOT = "/sessions"
+MOUNT_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+STATE_ROOT = "/var/lib/capybara/sessions"
+HOST_ROOT = "/host-home"
+SANDBOX_HOME = "/home/capybara"
+SANDBOX_WORK = "/workspace"
 JsonDict = Dict[str, Any]
 
 
@@ -26,6 +30,11 @@ def log(*parts: object) -> None:
 def validate_session_id(session_id: str) -> None:
     if not SESSION_RE.fullmatch(session_id):
         raise ValueError("invalid session_id")
+
+
+def validate_mount_name(name: str) -> None:
+    if not MOUNT_NAME_RE.fullmatch(name):
+        raise ValueError("invalid mount_name")
 
 
 def user_for_session(session_id: str) -> str:
@@ -40,7 +49,19 @@ def group_for_session(session_id: str) -> str:
 
 def session_root(session_id: str) -> str:
     validate_session_id(session_id)
-    return os.path.join(SESSIONS_ROOT, session_id)
+    return os.path.join(STATE_ROOT, session_id)
+
+
+def session_home(session_id: str) -> str:
+    return os.path.join(session_root(session_id), "home")
+
+
+def session_work(session_id: str) -> str:
+    return os.path.join(session_root(session_id), "work")
+
+
+def mounts_path(session_id: str) -> str:
+    return os.path.join(session_root(session_id), "mounts.json")
 
 
 def run(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
@@ -55,6 +76,16 @@ def ensure_directory(path: str) -> None:
         return
     if stat.S_ISLNK(st.st_mode) or not stat.S_ISDIR(st.st_mode):
         raise RuntimeError(f"{path} must be a directory")
+
+
+def ensure_file(path: str, contents: str) -> None:
+    try:
+        st = os.lstat(path)
+    except FileNotFoundError:
+        Path(path).write_text(contents)
+        return
+    if stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode):
+        raise RuntimeError(f"{path} must be a regular file")
 
 
 def chmod_chown(path: str, owner: str, mode: str) -> None:
@@ -149,6 +180,18 @@ def collect_process_output(proc: subprocess.Popen[str], timeout_seconds: float =
         return "", "command output collection timed out\n"
 
 
+def terminate_session_command(proc: subprocess.Popen[str], user: str) -> tuple[str, str]:
+    signal_process_group(proc, signal.SIGTERM)
+    try:
+        stdout, stderr = proc.communicate(timeout=1)
+    except subprocess.TimeoutExpired:
+        signal_process_group(proc, signal.SIGKILL)
+        signal_user_processes(user, signal.SIGKILL)
+        wait_user_processes_gone(user, 1)
+        stdout, stderr = collect_process_output(proc)
+    return stdout, stderr
+
+
 def kill_session_processes(user: str) -> None:
     signal_user_processes(user, signal.SIGTERM)
     if wait_user_processes_gone(user, 1):
@@ -159,21 +202,142 @@ def kill_session_processes(user: str) -> None:
         raise RuntimeError(f"failed to kill session processes for {user}")
 
 
-def terminate_session_command(proc: subprocess.Popen[str], user: str) -> tuple[str, str]:
-    signal_process_group(proc, signal.SIGTERM)
+def load_mounts(session_id: str) -> dict[str, dict[str, Any]]:
+    path = mounts_path(session_id)
     try:
-        kill_session_processes(user)
-    finally:
-        signal_process_group(proc, signal.SIGKILL)
-    return collect_process_output(proc)
+        data = json.loads(Path(path).read_text())
+    except FileNotFoundError:
+        raise ValueError("session does not exist") from None
+    if not isinstance(data, dict):
+        raise RuntimeError("mounts.json must contain an object")
+    for name, value in data.items():
+        validate_mount_name(name)
+        if not isinstance(value, dict):
+            raise RuntimeError("mounts.json entries must be objects")
+        source = value.get("source")
+        writable = value.get("writable")
+        if not isinstance(source, str) or not isinstance(writable, bool):
+            raise RuntimeError("mounts.json entry is invalid")
+    return cast(dict[str, dict[str, Any]], data)
 
 
-_MOUNT_OCTAL_ESCAPE = re.compile(r"\\([0-7]{3})")
+def store_mounts(session_id: str, mounts: dict[str, dict[str, Any]]) -> None:
+    path = mounts_path(session_id)
+    tmp_path = f"{path}.tmp"
+    Path(tmp_path).write_text(json.dumps(mounts, sort_keys=True, indent=2) + "\n")
+    chmod_chown(tmp_path, "root:root", "600")
+    os.replace(tmp_path, path)
 
 
-def decode_mount_field(value: str) -> str:
-    """Decode kernel mangle_path escapes from /proc/mounts (e.g. ``\\040`` for space)."""
-    return _MOUNT_OCTAL_ESCAPE.sub(lambda m: chr(int(m.group(1), 8)), value)
+def path_under(needle: str, root: str) -> bool:
+    return needle == root or needle.startswith(root + os.sep)
+
+
+def resolve_host_path(path: str) -> str:
+    if not os.path.isabs(path):
+        raise ValueError("host_path must be absolute")
+    resolved = os.path.realpath(path)
+    if not path_under(resolved, os.path.realpath(HOST_ROOT)):
+        raise ValueError("host_path outside host root")
+    if not os.path.isdir(resolved):
+        raise ValueError("host_path must be an existing directory")
+    return resolved
+
+
+def resolved_resolv_conf() -> str:
+    # On systemd-resolved hosts /etc/resolv.conf is a symlink into
+    # /run/systemd/resolve/, which bwrap's --ro-bind /etc carries through but
+    # whose target isn't bound inside the sandbox — the link would dangle and
+    # DNS would silently break. Bind the resolved file separately over
+    # /etc/resolv.conf so the sandbox sees a working resolver config.
+    resolved = os.path.realpath("/etc/resolv.conf")
+    if not os.path.isfile(resolved):
+        raise RuntimeError(f"resolved resolv.conf is not a file: {resolved}")
+    return resolved
+
+
+def validate_sandbox_cwd(cwd: object) -> str:
+    if cwd is None:
+        return SANDBOX_WORK
+    if not isinstance(cwd, str) or not cwd.startswith("/"):
+        raise ValueError("cwd must be an absolute sandbox path")
+    allowed = (SANDBOX_WORK, SANDBOX_HOME, "/tmp", "/mnt")
+    if not any(path_under(cwd, root) for root in allowed):
+        raise ValueError("cwd outside sandbox writable roots")
+    if ".." in Path(cwd).parts:
+        raise ValueError("cwd must not contain ..")
+    return cwd
+
+
+def bwrap_args(session_id: str, cwd: str) -> list[str]:
+    args = [
+        "bwrap",
+        "--new-session",
+        "--die-with-parent",
+        "--unshare-pid",
+        "--proc",
+        "/proc",
+        "--dev",
+        "/dev",
+        "--tmpfs",
+        "/tmp",
+        "--ro-bind",
+        "/usr",
+        "/usr",
+        "--ro-bind",
+        "/bin",
+        "/bin",
+        "--ro-bind",
+        "/lib",
+        "/lib",
+        "--ro-bind-try",
+        "/lib64",
+        "/lib64",
+        "--ro-bind",
+        "/etc",
+        "/etc",
+        "--ro-bind",
+        resolved_resolv_conf(),
+        "/etc/resolv.conf",
+        "--dir",
+        "/home",
+        "--bind",
+        session_home(session_id),
+        SANDBOX_HOME,
+        "--bind",
+        session_work(session_id),
+        SANDBOX_WORK,
+        "--dir",
+        "/mnt",
+    ]
+
+    for name, mount in sorted(load_mounts(session_id).items()):
+        target = f"/mnt/{name}"
+        source = resolve_host_path(cast(str, mount["source"]))
+        args.extend(["--dir", target])
+        args.extend(["--bind" if mount["writable"] else "--ro-bind", source, target])
+
+    args.extend(
+        [
+            "--chdir",
+            cwd,
+            "--setenv",
+            "HOME",
+            SANDBOX_HOME,
+            "--setenv",
+            "USER",
+            "capybara",
+            "--setenv",
+            "LOGNAME",
+            "capybara",
+            "--setenv",
+            "TMPDIR",
+            "/tmp",
+            "/bin/bash",
+            "-lc",
+        ]
+    )
+    return args
 
 
 def handle_ping(_params: JsonDict) -> JsonDict:
@@ -185,19 +349,22 @@ def handle_create_session(params: JsonDict) -> JsonDict:
     if not isinstance(session_id, str):
         raise ValueError("session_id is required")
     root = session_root(session_id)
+    home = session_home(session_id)
+    work = session_work(session_id)
+    mounts = mounts_path(session_id)
     user = user_for_session(session_id)
     group = group_for_session(session_id)
 
-    home = os.path.join(root, "home")
-    work = os.path.join(root, "work")
-    mnt = os.path.join(root, "mnt")
+    ensure_directory("/var/lib/capybara")
+    chmod_chown("/var/lib/capybara", "root:root", "755")
+    ensure_directory(STATE_ROOT)
+    chmod_chown(STATE_ROOT, "root:root", "711")
     ensure_directory(root)
     ensure_directory(home)
     ensure_directory(work)
-    ensure_directory(mnt)
+    ensure_file(mounts, "{}\n")
 
     run(["groupadd", "--force", group])
-
     if not user_exists(user):
         run(
             [
@@ -206,53 +373,50 @@ def handle_create_session(params: JsonDict) -> JsonDict:
                 "--gid",
                 group,
                 "--home-dir",
-                home,
+                SANDBOX_HOME,
                 "--shell",
                 "/bin/bash",
                 user,
             ]
         )
     else:
-        run(["usermod", "--gid", group, user])
+        run(["usermod", "--gid", group, "--home", SANDBOX_HOME, user])
 
-    # The session root and mnt/ catalog stay root-owned so the agent cannot
-    # remove mnt/ and replace it with a symlink before the supervisor binds
-    # approved host directories into it. The per-session group lets only this
-    # session traverse its root and mount catalog; other session users cannot.
     chmod_chown(root, f"root:{group}", "750")
-    chmod_chown(home, f"{user}:{user}", "700")
-    chmod_chown(work, f"{user}:{user}", "700")
-    chmod_chown(mnt, f"root:{group}", "750")
+    chmod_chown(home, f"{user}:{group}", "700")
+    chmod_chown(work, f"{user}:{group}", "700")
+    chmod_chown(mounts, "root:root", "600")
     return {"sessionRoot": root, "user": user}
 
 
-def unmount_session_mounts(root: str) -> None:
-    # Unmount everything under <root>/mnt/ before the caller rm -rf's <root>.
-    # Without this, rm -rf would recurse INTO each bind mount and delete the
-    # host source files. /proc/mounts is in mount order, so we unmount in
-    # reverse to handle nested mounts. A failed umount is fatal — letting
-    # delete_session proceed would lose host data.
-    mnt_root = Path(root) / "mnt"
-    targets: list[str] = []
-    try:
-        with open("/proc/mounts") as f:
-            for line in f:
-                fields = line.split()
-                if len(fields) < 2:
-                    continue
-                target = decode_mount_field(fields[1])
-                if Path(target).is_relative_to(mnt_root):
-                    targets.append(target)
-    except OSError as exc:
-        # Fail closed: if we can't read /proc/mounts we don't know what to
-        # unmount, so refuse to fall through to the caller's `rm -rf root`.
-        raise RuntimeError(f"failed to enumerate mounts: {exc}") from exc
-    for target in sorted(targets, key=len, reverse=True):
-        result = subprocess.run(["umount", "--", target], text=True, capture_output=True)
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"failed to unmount {target}: {result.stderr.strip() or 'unknown error'}"
-            )
+def handle_connect_directory(params: JsonDict) -> JsonDict:
+    session_id = params.get("session_id")
+    host_path = params.get("host_path")
+    mount_name = params.get("mount_name")
+    writable = params.get("writable", False)
+    replace = params.get("replace", False)
+    if not isinstance(session_id, str):
+        raise ValueError("session_id is required")
+    if not isinstance(host_path, str):
+        raise ValueError("host_path is required")
+    if not isinstance(mount_name, str):
+        raise ValueError("mount_name is required")
+    if not isinstance(writable, bool):
+        raise ValueError("writable must be a boolean")
+    if not isinstance(replace, bool):
+        raise ValueError("replace must be a boolean")
+    validate_session_id(session_id)
+    validate_mount_name(mount_name)
+    if not os.path.isdir(session_root(session_id)):
+        raise ValueError("session does not exist")
+
+    source = resolve_host_path(host_path)
+    mounts = load_mounts(session_id)
+    if mount_name in mounts and not replace:
+        raise ValueError("mount_name already connected")
+    mounts[mount_name] = {"source": source, "writable": writable}
+    store_mounts(session_id, mounts)
+    return {"guestPath": f"/mnt/{mount_name}"}
 
 
 def handle_delete_session(params: JsonDict) -> JsonDict:
@@ -264,7 +428,6 @@ def handle_delete_session(params: JsonDict) -> JsonDict:
     group = group_for_session(session_id)
 
     kill_session_processes(user)
-    unmount_session_mounts(root)
 
     if user_exists(user):
         userdel = subprocess.run(["userdel", user], text=True, capture_output=True)
@@ -284,23 +447,18 @@ def handle_run_as_session(params: JsonDict) -> JsonDict:
     session_id = params.get("session_id")
     if not isinstance(session_id, str):
         raise ValueError("session_id is required")
-    root = os.path.realpath(session_root(session_id))
     user = user_for_session(session_id)
-    cwd = params.get("cwd")
     command = params.get("command")
     timeout_ms = parse_timeout_ms(params.get("timeout_ms", 60000))
+    cwd = validate_sandbox_cwd(params.get("cwd"))
 
-    if not isinstance(cwd, str) or not cwd:
-        raise ValueError("cwd is required")
     if not isinstance(command, str):
         raise ValueError("command is required")
-    cwd_real = os.path.realpath(cwd)
-    if cwd_real != root and not cwd_real.startswith(root + os.sep):
-        raise ValueError("cwd outside session root")
+    if not os.path.isdir(session_root(session_id)):
+        raise ValueError("session does not exist")
 
     proc = subprocess.Popen(
-        ["sudo", "-u", user, "--", "bash", "-lc", command],
-        cwd=cwd_real,
+        ["sudo", "-u", user, "--", *bwrap_args(session_id, cwd), command],
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -335,6 +493,7 @@ def handle_shutdown(_params: JsonDict) -> JsonDict:
 METHODS: dict[str, Callable[[JsonDict], JsonDict]] = {
     "ping": handle_ping,
     "create_session": handle_create_session,
+    "connect_directory": handle_connect_directory,
     "delete_session": handle_delete_session,
     "run_as_session": handle_run_as_session,
     "shutdown": handle_shutdown,
