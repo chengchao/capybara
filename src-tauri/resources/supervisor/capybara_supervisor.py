@@ -244,6 +244,18 @@ def resolve_host_path(path: str) -> str:
     return resolved
 
 
+def resolved_resolv_conf() -> str:
+    # On systemd-resolved hosts /etc/resolv.conf is a symlink into
+    # /run/systemd/resolve/, which bwrap's --ro-bind /etc carries through but
+    # whose target isn't bound inside the sandbox — the link would dangle and
+    # DNS would silently break. Bind the resolved file separately over
+    # /etc/resolv.conf so the sandbox sees a working resolver config.
+    resolved = os.path.realpath("/etc/resolv.conf")
+    if not os.path.isfile(resolved):
+        raise RuntimeError(f"resolved resolv.conf is not a file: {resolved}")
+    return resolved
+
+
 def validate_sandbox_cwd(cwd: object) -> str:
     if cwd is None:
         return SANDBOX_WORK
@@ -284,6 +296,9 @@ def bwrap_args(session_id: str, cwd: str) -> list[str]:
         "--ro-bind",
         "/etc",
         "/etc",
+        "--ro-bind",
+        resolved_resolv_conf(),
+        "/etc/resolv.conf",
         "--dir",
         "/home",
         "--bind",
