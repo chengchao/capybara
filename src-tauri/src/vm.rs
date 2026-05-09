@@ -15,6 +15,7 @@ use tokio::process::{Child, ChildStdin, ChildStdout};
 
 const INSTANCE_NAME: &str = "agent";
 const SUPERVISOR_RESPONSE_TIMEOUT: Duration = Duration::from_secs(30);
+const SUPERVISOR_COMMAND_RESPONSE_GRACE: Duration = Duration::from_secs(5);
 
 const AGENT_YAML: &str = "base: template:default
 cpus: 2
@@ -63,6 +64,144 @@ pub fn get_vm_status(state: tauri::State<'_, VmState>) -> VmStatus {
     state.status.lock().unwrap().clone()
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateSessionResult {
+    pub session_root: String,
+    pub user: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectDirectoryResult {
+    pub guest_path: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RunSessionResult {
+    pub exit_code: i32,
+    pub stdout: String,
+    pub stderr: String,
+    pub timed_out: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DeleteSessionResult {
+    pub ok: bool,
+}
+
+#[tauri::command]
+pub async fn create_session(
+    app: AppHandle,
+    session_id: String,
+) -> Result<CreateSessionResult, String> {
+    request_supervisor(
+        &app,
+        "create_session",
+        json!({
+            "session_id": session_id,
+        }),
+    )
+    .await
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn connect_directory(
+    app: AppHandle,
+    session_id: String,
+    host_path: String,
+    mount_name: String,
+    writable: bool,
+    replace: bool,
+) -> Result<ConnectDirectoryResult, String> {
+    request_supervisor(
+        &app,
+        "connect_directory",
+        json!({
+            "session_id": session_id,
+            "host_path": host_path,
+            "mount_name": mount_name,
+            "writable": writable,
+            "replace": replace,
+        }),
+    )
+    .await
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn run_as_session(
+    app: AppHandle,
+    session_id: String,
+    command: String,
+    cwd: Option<String>,
+    timeout_ms: Option<u64>,
+) -> Result<RunSessionResult, String> {
+    let timeout_ms = timeout_ms.unwrap_or(5000);
+    request_supervisor_with_timeout(
+        &app,
+        "run_as_session",
+        json!({
+            "session_id": session_id,
+            "command": command,
+            "cwd": cwd.unwrap_or_else(|| "/workspace".into()),
+            "timeout_ms": timeout_ms,
+        }),
+        command_response_timeout(timeout_ms),
+    )
+    .await
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn delete_session(
+    app: AppHandle,
+    session_id: String,
+) -> Result<DeleteSessionResult, String> {
+    request_supervisor(
+        &app,
+        "delete_session",
+        json!({
+            "session_id": session_id,
+        }),
+    )
+    .await
+    .map_err(|e| e.to_string())
+}
+
+async fn request_supervisor<T>(app: &AppHandle, method: &str, params: Value) -> Result<T, VmError>
+where
+    T: for<'de> Deserialize<'de>,
+{
+    request_supervisor_with_timeout(app, method, params, SUPERVISOR_RESPONSE_TIMEOUT).await
+}
+
+async fn request_supervisor_with_timeout<T>(
+    app: &AppHandle,
+    method: &str,
+    params: Value,
+    response_timeout: Duration,
+) -> Result<T, VmError>
+where
+    T: for<'de> Deserialize<'de>,
+{
+    let paths = LimaPaths::resolve(app)?;
+    let mut client = SupervisorClient::start(&paths).await?;
+    let response = client.request(method, params, response_timeout).await;
+    let shutdown = client.shutdown().await;
+    let value = response?;
+    shutdown?;
+    serde_json::from_value(value).map_err(VmError::SupervisorJson)
+}
+
+fn command_response_timeout(timeout_ms: u64) -> Duration {
+    Duration::from_millis(timeout_ms)
+        .checked_add(SUPERVISOR_COMMAND_RESPONSE_GRACE)
+        .unwrap_or(Duration::MAX)
+}
+
 struct LimaPaths {
     limactl: PathBuf,
     lima_home: PathBuf,
@@ -72,6 +211,13 @@ struct LimaPaths {
 
 impl LimaPaths {
     fn resolve(app: &AppHandle) -> Result<Self, VmError> {
+        // In dev (`bun run tauri dev`) Tauri's resource_dir points into a
+        // build cache that doesn't carry our bundled `vendor/` and
+        // `resources/` trees, so read straight from the source tree
+        // instead. Release builds keep using the real bundle.
+        #[cfg(debug_assertions)]
+        let resource_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        #[cfg(not(debug_assertions))]
         let resource_dir = app.path().resource_dir().map_err(VmError::ResolvePath)?;
         // LIMA_HOME must stay short on macOS: Lima writes `<LIMA_HOME>/<instance>/ssh.sock.<PID>`
         // which is bound by UNIX_PATH_MAX = 104. `~/Library/Application Support/<bundle-id>/lima/`
@@ -306,9 +452,15 @@ async fn ensure_bwrap(paths: &LimaPaths) -> Result<(), VmError> {
 async fn smoke_test_supervisor(paths: &LimaPaths) -> Result<(), VmError> {
     eprintln!("vm: testing supervisor...");
     let mut client = SupervisorClient::start(paths).await?;
-    client.request("ping", json!({})).await?;
     client
-        .request("create_session", json!({ "session_id": "smoke_session" }))
+        .request("ping", json!({}), SUPERVISOR_RESPONSE_TIMEOUT)
+        .await?;
+    client
+        .request(
+            "create_session",
+            json!({ "session_id": "smoke_session" }),
+            SUPERVISOR_RESPONSE_TIMEOUT,
+        )
         .await?;
     let smoke_result = async {
         let result = client
@@ -320,6 +472,7 @@ async fn smoke_test_supervisor(paths: &LimaPaths) -> Result<(), VmError> {
                     "command": "id -un && pwd",
                     "timeout_ms": 5000,
                 }),
+                command_response_timeout(5000),
             )
             .await?;
         let exit_code = result
@@ -336,7 +489,11 @@ async fn smoke_test_supervisor(paths: &LimaPaths) -> Result<(), VmError> {
     }
     .await;
     let cleanup_result = client
-        .request("delete_session", json!({ "session_id": "smoke_session" }))
+        .request(
+            "delete_session",
+            json!({ "session_id": "smoke_session" }),
+            SUPERVISOR_RESPONSE_TIMEOUT,
+        )
         .await;
     client.shutdown().await?;
     smoke_result?;
@@ -387,7 +544,12 @@ impl SupervisorClient {
         })
     }
 
-    async fn request(&mut self, method: &str, params: Value) -> Result<Value, VmError> {
+    async fn request(
+        &mut self,
+        method: &str,
+        params: Value,
+        response_timeout: Duration,
+    ) -> Result<Value, VmError> {
         self.next_id += 1;
         let id = self.next_id.to_string();
         let request = json!({
@@ -406,7 +568,7 @@ impl SupervisorClient {
         self.stdin.flush().await.map_err(VmError::SupervisorIo)?;
 
         let line = self.lines.next_line();
-        let line = tokio::time::timeout(SUPERVISOR_RESPONSE_TIMEOUT, line)
+        let line = tokio::time::timeout(response_timeout, line)
             .await
             .map_err(|_| VmError::SupervisorTimeout)?
             .map_err(VmError::SupervisorIo)?
@@ -430,7 +592,9 @@ impl SupervisorClient {
     }
 
     async fn shutdown(mut self) -> Result<(), VmError> {
-        let _ = self.request("shutdown", json!({})).await;
+        let _ = self
+            .request("shutdown", json!({}), SUPERVISOR_RESPONSE_TIMEOUT)
+            .await;
         let _ = self.child.wait().await;
         Ok(())
     }
@@ -598,5 +762,21 @@ mod tests {
             Err(VmError::Parse { line_no: 1, .. }) => {}
             other => panic!("expected Parse error on line 1, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn command_response_timeout_includes_grace() {
+        assert_eq!(
+            command_response_timeout(60_000),
+            Duration::from_secs(60) + SUPERVISOR_COMMAND_RESPONSE_GRACE
+        );
+    }
+
+    #[test]
+    fn command_response_timeout_uses_milliseconds() {
+        assert_eq!(
+            command_response_timeout(5_000),
+            Duration::from_secs(5) + SUPERVISOR_COMMAND_RESPONSE_GRACE
+        );
     }
 }

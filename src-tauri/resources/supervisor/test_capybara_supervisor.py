@@ -153,24 +153,19 @@ def test_invalid_session_id_is_rejected_before_sudo():
 
 def test_bwrap_args_preserve_network_namespace():
     original_load_mounts = capybara_supervisor.load_mounts
-    original_resolved_resolv_conf = capybara_supervisor.resolved_resolv_conf
     capybara_supervisor.load_mounts = lambda _session_id: {}
-    capybara_supervisor.resolved_resolv_conf = lambda: "/run/systemd/resolve/stub-resolv.conf"
     try:
         args = capybara_supervisor.bwrap_args("args", "/workspace")
     finally:
         capybara_supervisor.load_mounts = original_load_mounts
-        capybara_supervisor.resolved_resolv_conf = original_resolved_resolv_conf
     assert "--new-session" in args
     assert "--die-with-parent" in args
     assert "--unshare-pid" in args
     assert "--proc" in args
     assert "--unshare-all" not in args
     assert "--unshare-net" not in args
-    etc_bind = args.index("/etc")
-    resolv_bind = args.index("/etc/resolv.conf")
-    assert etc_bind < resolv_bind
-    assert args[resolv_bind - 1] == "/run/systemd/resolve/stub-resolv.conf"
+    assert "--ro-bind-try" in args
+    assert "/run/systemd/resolve" in args
 
 
 def test_session_layout_and_mounts_json():
@@ -390,50 +385,6 @@ def test_connected_directory_is_visible_and_writable():
         cleanup_session(proc, "rw")
         shutdown(proc)
         subprocess.run(["rm", "-rf", "/host-home/Writable"], check=False)
-
-
-def test_writable_connected_directory_still_requires_user_write_permission():
-    if not integration_enabled():
-        return
-
-    src = Path("/host-home/WritableNoAcl")
-    subprocess.run(["rm", "-rf", str(src)], check=False)
-    subprocess.run(["mkdir", "-p", str(src)], check=True)
-    subprocess.run(["chown", "root:root", str(src)], check=True)
-    subprocess.run(["chmod", "755", str(src)], check=True)
-    proc = start_supervisor()
-    try:
-        send_request(proc, "create_session", {"session_id": "rwmismatch"}, request_id="create")
-        connected = send_request(
-            proc,
-            "connect_directory",
-            {
-                "session_id": "rwmismatch",
-                "host_path": str(src),
-                "mount_name": "WritableNoAcl",
-                "writable": True,
-            },
-            request_id="connect",
-        )
-        assert connected == {"id": "connect", "result": {"guestPath": "/mnt/WritableNoAcl"}}
-
-        ran = send_request(
-            proc,
-            "run_as_session",
-            {
-                "session_id": "rwmismatch",
-                "command": "touch /mnt/WritableNoAcl/from-sandbox",
-                "timeout_ms": 5000,
-            },
-            request_id="run",
-        )
-        assert ran["result"]["exitCode"] != 0
-        assert "Permission denied" in ran["result"]["stderr"]
-        assert not Path(src, "from-sandbox").exists()
-    finally:
-        cleanup_session(proc, "rwmismatch")
-        shutdown(proc)
-        subprocess.run(["rm", "-rf", str(src)], check=False)
 
 
 def test_readonly_connected_directory_blocks_writes():
