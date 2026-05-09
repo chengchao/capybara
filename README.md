@@ -19,3 +19,7 @@ bun run tauri dev
 `bun run setup` is idempotent and pinned to a single Lima version (see `src-tauri/scripts/fetch-lima.sh`). It supports macOS only (arm64 / x86_64).
 
 On startup, the app boots a Lima VM named `agent` under `~/.capybara/lima` (anchored short to stay under macOS's 104-char `UNIX_PATH_MAX` for SSH sockets — Tauri's `app_data_dir` is too long). First run downloads and provisions the cloud image (a few minutes); subsequent warm boots take ~10–15 s. Quitting the app stops the VM (best-effort, 10-second timeout). VM lifecycle progress and failures are printed to stderr — visible in the `tauri dev` terminal or `Console.app` for release builds.
+
+The host talks to the VM supervisor over newline-delimited JSON on
+stdin/stdout. See [docs/supervisor-protocol.md](docs/supervisor-protocol.md)
+for the current protocol contract.
