@@ -2,6 +2,7 @@ import { useState } from "react";
 import reactLogo from "./assets/react.svg";
 import { greet } from "./lib/tauri";
 import VmStatusPill from "./components/VmStatusPill";
+import DownloadsProbe from "./components/DownloadsProbe";
 import "./App.css";
 
 function App() {
@@ -15,6 +16,7 @@ function App() {
   return (
     <main className="container">
       <VmStatusPill />
+      <DownloadsProbe />
       <h1>Welcome to Tauri + React</h1>
 
       <div className="row">

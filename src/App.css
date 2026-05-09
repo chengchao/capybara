@@ -134,6 +134,90 @@ button {
   overflow: auto;
 }
 
+.probe {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1rem auto 0;
+  width: min(960px, calc(100% - 2rem));
+}
+
+.probe-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.probe-command {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 7rem;
+  resize: vertical;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  padding: 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  line-height: 1.35;
+  color: #111827;
+  background: #ffffff;
+}
+
+.probe-output,
+.probe-error {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 8rem;
+  max-height: 28rem;
+  overflow: auto;
+  margin: 0;
+  padding: 0.75rem;
+  border-radius: 8px;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+}
+
+.probe-streams {
+  display: grid;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.probe-stream:nth-child(2) .probe-output,
+.probe-stream:nth-child(3) .probe-output {
+  min-height: 12rem;
+}
+
+.probe-stream {
+  width: 100%;
+}
+
+.probe-stream__label {
+  margin-bottom: 0.25rem;
+  text-align: left;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #4b5563;
+}
+
+.probe-output {
+  background: #ffffff;
+  color: #111827;
+  border: 1px solid #d1d5db;
+}
+
+.probe-error {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     color: #f6f6f6;
@@ -145,11 +229,28 @@ button {
   }
 
   input,
+  textarea,
   button {
     color: #ffffff;
     background-color: #0f0f0f98;
   }
   button:active {
     background-color: #0f0f0f69;
+  }
+
+  .probe-output {
+    background: #111827;
+    color: #f9fafb;
+    border-color: #374151;
+  }
+
+  .probe-command {
+    background: #111827;
+    color: #f9fafb;
+    border-color: #374151;
+  }
+
+  .probe-stream__label {
+    color: #d1d5db;
   }
 }

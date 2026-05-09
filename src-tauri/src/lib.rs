@@ -9,7 +9,14 @@ mod vm;
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![commands::greet, vm::get_vm_status])
+        .invoke_handler(tauri::generate_handler![
+            commands::greet,
+            vm::get_vm_status,
+            vm::create_session,
+            vm::connect_directory,
+            vm::run_as_session,
+            vm::delete_session,
+        ])
         .manage(vm::VmState::default())
         .setup(|app| {
             let handle = app.handle().clone();

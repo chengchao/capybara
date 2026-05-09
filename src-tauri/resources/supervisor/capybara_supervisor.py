@@ -98,11 +98,23 @@ def uid_for_user(user: str) -> int:
 
 
 def group_exists(group: str) -> bool:
-    return subprocess.run(["getent", "group", group], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+    return (
+        subprocess.run(
+            ["getent", "group", group],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        ).returncode
+        == 0
+    )
 
 
 def user_exists(user: str) -> bool:
-    return subprocess.run(["id", "-u", user], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+    return (
+        subprocess.run(
+            ["id", "-u", user], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        ).returncode
+        == 0
+    )
 
 
 def parse_timeout_ms(value: object) -> int:
@@ -173,14 +185,18 @@ def signal_process_group(proc: subprocess.Popen[str], sig: signal.Signals) -> No
         pass
 
 
-def collect_process_output(proc: subprocess.Popen[str], timeout_seconds: float = 2) -> tuple[str, str]:
+def collect_process_output(
+    proc: subprocess.Popen[str], timeout_seconds: float = 2
+) -> tuple[str, str]:
     try:
         return proc.communicate(timeout=timeout_seconds)
     except subprocess.TimeoutExpired:
         return "", "command output collection timed out\n"
 
 
-def terminate_session_command(proc: subprocess.Popen[str], user: str) -> tuple[str, str]:
+def terminate_session_command(
+    proc: subprocess.Popen[str], user: str
+) -> tuple[str, str]:
     signal_process_group(proc, signal.SIGTERM)
     try:
         stdout, stderr = proc.communicate(timeout=1)
@@ -210,7 +226,7 @@ def load_mounts(session_id: str) -> dict[str, dict[str, Any]]:
         raise ValueError("session does not exist") from None
     if not isinstance(data, dict):
         raise RuntimeError("mounts.json must contain an object")
-    for name, value in data.items():
+    for name, value in cast(dict[str, Any], data).items():
         validate_mount_name(name)
         if not isinstance(value, dict):
             raise RuntimeError("mounts.json entries must be objects")
@@ -241,18 +257,6 @@ def resolve_host_path(path: str) -> str:
         raise ValueError("host_path outside host root")
     if not os.path.isdir(resolved):
         raise ValueError("host_path must be an existing directory")
-    return resolved
-
-
-def resolved_resolv_conf() -> str:
-    # On systemd-resolved hosts /etc/resolv.conf is a symlink into
-    # /run/systemd/resolve/, which bwrap's --ro-bind /etc carries through but
-    # whose target isn't bound inside the sandbox — the link would dangle and
-    # DNS would silently break. Bind the resolved file separately over
-    # /etc/resolv.conf so the sandbox sees a working resolver config.
-    resolved = os.path.realpath("/etc/resolv.conf")
-    if not os.path.isfile(resolved):
-        raise RuntimeError(f"resolved resolv.conf is not a file: {resolved}")
     return resolved
 
 
@@ -296,9 +300,16 @@ def bwrap_args(session_id: str, cwd: str) -> list[str]:
         "--ro-bind",
         "/etc",
         "/etc",
-        "--ro-bind",
-        resolved_resolv_conf(),
-        "/etc/resolv.conf",
+        # Capybara controls the VM image and uses Ubuntu's systemd-resolved
+        # layout, where /etc/resolv.conf points into /run/systemd/resolve/.
+        # Bind that target so the /etc symlink does not dangle in the sandbox.
+        "--dir",
+        "/run",
+        "--dir",
+        "/run/systemd",
+        "--ro-bind-try",
+        "/run/systemd/resolve",
+        "/run/systemd/resolve",
         "--dir",
         "/home",
         "--bind",
@@ -432,12 +443,16 @@ def handle_delete_session(params: JsonDict) -> JsonDict:
     if user_exists(user):
         userdel = subprocess.run(["userdel", user], text=True, capture_output=True)
         if userdel.returncode != 0 and user_exists(user):
-            raise RuntimeError(f"failed to delete session user {user}: {userdel.stderr.strip()}")
+            raise RuntimeError(
+                f"failed to delete session user {user}: {userdel.stderr.strip()}"
+            )
 
     if group_exists(group):
         groupdel = subprocess.run(["groupdel", group], text=True, capture_output=True)
         if groupdel.returncode != 0 and group_exists(group):
-            raise RuntimeError(f"failed to delete session group {group}: {groupdel.stderr.strip()}")
+            raise RuntimeError(
+                f"failed to delete session group {group}: {groupdel.stderr.strip()}"
+            )
 
     run(["rm", "-rf", root])
     return {"ok": True}
