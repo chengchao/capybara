@@ -208,6 +208,29 @@ def test_session_layout_and_mounts_json():
         shutdown(proc)
 
 
+def test_create_session_is_idempotent():
+    if not integration_enabled():
+        return
+
+    proc = start_supervisor()
+    try:
+        first = send_request(proc, "create_session", {"session_id": "idem"}, request_id="first")
+        second = send_request(proc, "create_session", {"session_id": "idem"}, request_id="second")
+
+        expected = {
+            "sessionRoot": "/var/lib/capybara/sessions/idem",
+            "user": "capybara_idem",
+        }
+        assert first == {"id": "first", "result": expected}
+        assert second == {"id": "second", "result": expected}
+        assert user_exists("capybara_idem")
+        assert group_exists("capybara_idem")
+        assert Path("/var/lib/capybara/sessions/idem/mounts.json").exists()
+    finally:
+        cleanup_session(proc, "idem")
+        shutdown(proc)
+
+
 def test_bwrap_session_can_use_home_workspace_and_tmp():
     if not integration_enabled():
         return
@@ -487,6 +510,36 @@ def test_timeout_kills_bwrap_process_tree():
         assert not has_process_for_user_containing("capybara_timeout", "sleep 600")
     finally:
         cleanup_session(proc, "timeout")
+        shutdown(proc)
+
+
+def test_timeout_response_shape_is_stable():
+    if not integration_enabled():
+        return
+
+    proc = start_supervisor()
+    try:
+        send_request(proc, "create_session", {"session_id": "timeoutshape"}, request_id="create")
+        timed_out = send_request(
+            proc,
+            "run_as_session",
+            {
+                "session_id": "timeoutshape",
+                "command": "sleep 5",
+                "timeout_ms": 100,
+            },
+            request_id="timeout",
+        )
+        assert timed_out["id"] == "timeout"
+        result = timed_out["result"]
+        assert set(result) == {"exitCode", "stdout", "stderr", "timedOut"}
+        assert isinstance(result["exitCode"], int)
+        assert isinstance(result["stdout"], str)
+        assert isinstance(result["stderr"], str)
+        assert result["timedOut"] is True
+        assert "command timed out" in result["stderr"]
+    finally:
+        cleanup_session(proc, "timeoutshape")
         shutdown(proc)
 
 

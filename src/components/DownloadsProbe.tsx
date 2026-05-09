@@ -8,6 +8,8 @@ import {
 
 const SESSION_ID = "downloadsprobe";
 
+// Temporary development probe for exercising the supervisor protocol from the UI.
+// Replace with the real workspace/session surface before productizing.
 export default function DownloadsProbe() {
   const [busy, setBusy] = useState(false);
   const [sessionCreated, setSessionCreated] = useState(false);
