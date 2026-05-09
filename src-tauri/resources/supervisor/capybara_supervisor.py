@@ -300,10 +300,9 @@ def bwrap_args(session_id: str, cwd: str) -> list[str]:
         "--ro-bind",
         "/etc",
         "/etc",
-        # On systemd-resolved hosts /etc/resolv.conf is a symlink into
-        # /run/systemd/resolve/. Without binding that target the symlink
-        # would dangle inside the sandbox and DNS would silently break;
-        # ro-bind-try lets non-systemd-resolved hosts skip the bind cleanly.
+        # Capybara controls the VM image and uses Ubuntu's systemd-resolved
+        # layout, where /etc/resolv.conf points into /run/systemd/resolve/.
+        # Bind that target so the /etc symlink does not dangle in the sandbox.
         "--dir",
         "/run",
         "--dir",
