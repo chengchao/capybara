@@ -87,6 +87,7 @@ pub struct RunSessionResult {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DeleteSessionResult {
     pub ok: bool,
 }
@@ -139,7 +140,7 @@ pub async fn run_as_session(
     cwd: Option<String>,
     timeout_ms: Option<u64>,
 ) -> Result<RunSessionResult, String> {
-    let timeout_ms = timeout_ms.unwrap_or(5000);
+    let timeout_ms = timeout_ms.unwrap_or(60_000);
     request_supervisor_with_timeout(
         &app,
         "run_as_session",
