@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "com.capybara.capybara-app",
   "build": {
-    "beforeDevCommand": "bun run dev",
+    "beforeDevCommand": "bun run setup:bun && bun run build:agent && bun run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "bun run build",
+    "beforeBuildCommand": "bun run setup:bun && bun run build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -24,10 +24,14 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "externalBin": [
+      "binaries/bun"
+    ],
     "resources": [
       "vendor/lima/bin/**/*",
       "vendor/lima/share/lima/**/*",
       "vendor/lima/libexec/lima/**/*",
+      "resources/capybara-agent/index.js",
       "resources/supervisor/capybara_supervisor.py"
     ],
     "icon": [

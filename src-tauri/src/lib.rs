@@ -2,12 +2,14 @@ use std::time::Duration;
 
 use tauri::RunEvent;
 
+mod agent;
 mod commands;
 mod vm;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             commands::greet,
@@ -16,7 +18,9 @@ pub fn run() {
             vm::connect_directory,
             vm::run_as_session,
             vm::delete_session,
+            agent::start_agent_task,
         ])
+        .manage(agent::AgentState::default())
         .manage(vm::VmState::default())
         .setup(|app| {
             let handle = app.handle().clone();
@@ -40,6 +44,7 @@ pub fn run() {
         if matches!(event, RunEvent::Exit) {
             let handle = handle.clone();
             tauri::async_runtime::block_on(async move {
+                agent::stop_agent(&handle).await;
                 let _ = tokio::time::timeout(Duration::from_secs(10), vm::stop_vm(&handle)).await;
             });
         }
