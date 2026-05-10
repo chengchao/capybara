@@ -4,8 +4,8 @@ type RequestMessage = {
   params?: unknown;
 };
 
-function send(value: unknown) {
-  Bun.write(Bun.stdout, `${JSON.stringify(value)}\n`);
+function send(value: unknown): Promise<number> {
+  return Bun.write(Bun.stdout, `${JSON.stringify(value)}\n`);
 }
 
 function fail(id: string | undefined, message: string) {
@@ -24,7 +24,7 @@ async function handleLine(line: string) {
   }
 
   if (request.method === "shutdown") {
-    send({ id: request.id, ok: true, result: { ok: true } });
+    await send({ id: request.id, ok: true, result: { ok: true } });
     process.exit(0);
   }
 

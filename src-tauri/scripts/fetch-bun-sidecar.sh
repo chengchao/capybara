@@ -38,6 +38,7 @@ tmpdir="$(mktemp -d)"
 trap 'rm -rf "${tmpdir}"' EXIT
 
 echo "fetch-bun-sidecar: downloading ${url}"
+# TODO(PR-Runtime-Manifest): replace with sha256-verified fetch via runtime-manifest.json.
 curl --fail --location --proto '=https' --tlsv1.2 --output "${tmpdir}/${archive}" "${url}"
 
 echo "fetch-bun-sidecar: extracting ${archive}"

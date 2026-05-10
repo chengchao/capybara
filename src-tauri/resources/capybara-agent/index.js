@@ -1,7 +1,7 @@
 // @bun
 // src/index.ts
 function send(value) {
-  Bun.write(Bun.stdout, `${JSON.stringify(value)}
+  return Bun.write(Bun.stdout, `${JSON.stringify(value)}
 `);
 }
 function fail(id, message) {
@@ -17,7 +17,7 @@ async function handleLine(line) {
     return;
   }
   if (request.method === "shutdown") {
-    send({ id: request.id, ok: true, result: { ok: true } });
+    await send({ id: request.id, ok: true, result: { ok: true } });
     process.exit(0);
   }
   if (request.method !== "start_task") {
