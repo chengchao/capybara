@@ -1,0 +1,28 @@
+{
+  "bun": {
+    "version": "1.3.0",
+    "platforms": {
+      "aarch64-apple-darwin": {
+        "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.3.0/bun-darwin-aarch64.zip",
+        "sha256": "85848e3f96481efcabe75a500fd3b94b9bb95686ab7ad0a3892976c7be15036a"
+      },
+      "x86_64-apple-darwin": {
+        "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.3.0/bun-darwin-x64.zip",
+        "sha256": "09d54af86ec45354bb63ff7ccc3ce9520d74f4e45f9f7cac8ceb7fac422fcc19"
+      }
+    }
+  },
+  "lima": {
+    "version": "2.1.1",
+    "platforms": {
+      "aarch64-apple-darwin": {
+        "url": "https://github.com/lima-vm/lima/releases/download/v2.1.1/lima-2.1.1-Darwin-arm64.tar.gz",
+        "sha256": "b6b0e6701189cd8c4e549cc39e6d054dc681487798b9b774ad2cbd30c08b2bd8"
+      },
+      "x86_64-apple-darwin": {
+        "url": "https://github.com/lima-vm/lima/releases/download/v2.1.1/lima-2.1.1-Darwin-x86_64.tar.gz",
+        "sha256": "2dc5b10aa3a4f26d08c1f3fe83e37e01f85a7d9db0d1d5cb6985b18af96ab07d"
+      }
+    }
+  }
+}
