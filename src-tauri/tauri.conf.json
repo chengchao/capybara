@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "com.capybara.capybara-app",
   "build": {
-    "beforeDevCommand": "bun run setup:bun && bun run build:agent && bun run dev",
+    "beforeDevCommand": "bun run setup:runtimes && bun run build:agent && bun run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "bun run setup:bun && bun run build",
+    "beforeBuildCommand": "bun run setup:runtimes && bun run build",
     "frontendDist": "../dist"
   },
   "app": {

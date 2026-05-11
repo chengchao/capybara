@@ -8,15 +8,24 @@ This template should help get you started developing with Tauri, React and Types
 
 ## Setup
 
-The app bundles `limactl` (from [Lima](https://lima-vm.io)) as an internal resource. Fetch it once before your first dev/build:
+The app bundles two runtimes as internal resources: `limactl` (from [Lima](https://lima-vm.io)) for the VM, and `bun` as a Tauri sidecar for the agent. Both are pinned by sha256 in `src-tauri/runtime-manifest.json` and fetched by a single setup step:
 
 ```sh
 bun install
-bun run setup       # downloads Lima into src-tauri/vendor/lima/
-bun run tauri dev
+bun run tauri dev   # before*Command hooks call setup:runtimes for you
 ```
 
-`bun run setup` is idempotent and pinned to a single Lima version (see `src-tauri/scripts/fetch-lima.sh`). It supports macOS only (arm64 / x86_64).
+Or run the fetcher explicitly:
+
+```sh
+bun run setup:runtimes
+```
+
+`setup:runtimes` reads `src-tauri/runtime-manifest.json`, matches the host's Rust target triple (`rustc --print host-tuple`), downloads the pinned archive, verifies sha256 (refuses install on mismatch), and extracts. It's idempotent — re-runs skip when the binary already exists at the expected path. Currently supports `aarch64-apple-darwin` and `x86_64-apple-darwin`; add a triple to the manifest's `platforms` map to extend.
+
+**Bootstrap requirements:** Bun must be pre-installed on the dev machine (for `setup:runtimes` itself and the Vite/agent build). CI installs Bun in its first step. End users get a fully-bundled `.app` / `.dmg` from CI — they never run `setup:runtimes`.
+
+**Updating a pinned runtime:** bump `version` and `url` in the manifest, then refresh the `sha256` from the upstream archive (`shasum -a 256 <archive>` on macOS, `sha256sum <archive>` on Linux). Commit the manifest change so the new hash is reviewable.
 
 On startup, the app boots a Lima VM named `agent` under `~/.capybara/lima` (anchored short to stay under macOS's 104-char `UNIX_PATH_MAX` for SSH sockets — Tauri's `app_data_dir` is too long). First run downloads and provisions the cloud image (a few minutes); subsequent warm boots take ~10–15 s. Quitting the app stops the VM (best-effort, 10-second timeout). VM lifecycle progress and failures are printed to stderr — visible in the `tauri dev` terminal or `Console.app` for release builds.
 
