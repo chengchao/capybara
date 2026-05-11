@@ -238,6 +238,12 @@ def capybara_session_users() -> list[str]:
 # Sudo's reparent-to-init behavior means bwrap children can outlive a crashed
 # supervisor. SIGKILL strays; do NOT userdel or rm -rf — sessions are
 # persistent and the user/dir belong to the next supervisor instance.
+#
+# Not called from main() under the current per-call supervisor architecture:
+# concurrent Tauri invokes each spawn a fresh supervisor, and a sweep here would
+# trash sibling supervisors' in-flight `run_as_session` children. Wired up in
+# PR-C-persist where the supervisor becomes a long-lived `VmState`-owned child
+# and the sweep runs exactly once per app launch with no concurrent peers.
 def kill_stale_session_processes() -> None:
     for user in capybara_session_users():
         if has_user_processes(user):
@@ -548,7 +554,6 @@ def write_response(response: JsonDict) -> None:
 
 def main() -> None:
     log("started")
-    kill_stale_session_processes()
     for line in sys.stdin:
         if not line.strip():
             continue
