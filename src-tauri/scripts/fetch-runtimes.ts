@@ -68,6 +68,9 @@ async function installRuntime(
   log(`${name}: ok`);
 }
 
+// Existence-only check — we don't re-verify sha256 of already-installed
+// binaries. To force a re-fetch + verify, delete the file at the expected
+// path and re-run.
 function isInstalled(name: string, target: string): boolean {
   switch (name) {
     case "bun":
@@ -79,6 +82,10 @@ function isInstalled(name: string, target: string): boolean {
   }
 }
 
+// Per-runtime archive layout is hardcoded — adding a new OS triple
+// (e.g. linux-gnu) requires updating both the manifest URL and the
+// extraction path below, since Bun's archive interior changes shape
+// across OSes (bun-darwin-* vs bun-linux-*).
 async function extract(
   name: string,
   archive: string,
@@ -90,7 +97,6 @@ async function extract(
       const stage = join(tmp, `stage-${name}`);
       await mkdir(stage, { recursive: true });
       await run(["unzip", "-q", archive, "-d", stage]);
-      // Archive layout: bun-darwin-{x64|aarch64}/bun
       const arch = target.startsWith("aarch64") ? "aarch64" : "x64";
       const src = join(stage, `bun-darwin-${arch}`, "bun");
       const dest = join(SRC_TAURI, "binaries", `bun-${target}`);

@@ -25,7 +25,7 @@ bun run setup:runtimes
 
 **Bootstrap requirements:** Bun must be pre-installed on the dev machine (for `setup:runtimes` itself and the Vite/agent build). CI installs Bun in its first step. End users get a fully-bundled `.app` / `.dmg` from CI — they never run `setup:runtimes`.
 
-**Updating a pinned runtime:** bump `version` and `url` in the manifest, then refresh the `sha256` from the upstream archive (`shasum -a 256 <archive>`). Commit the manifest change so the new hash is reviewable.
+**Updating a pinned runtime:** bump `version` and `url` in the manifest, then refresh the `sha256` from the upstream archive (`shasum -a 256 <archive>` on macOS, `sha256sum <archive>` on Linux). Commit the manifest change so the new hash is reviewable.
 
 On startup, the app boots a Lima VM named `agent` under `~/.capybara/lima` (anchored short to stay under macOS's 104-char `UNIX_PATH_MAX` for SSH sockets — Tauri's `app_data_dir` is too long). First run downloads and provisions the cloud image (a few minutes); subsequent warm boots take ~10–15 s. Quitting the app stops the VM (best-effort, 10-second timeout). VM lifecycle progress and failures are printed to stderr — visible in the `tauri dev` terminal or `Console.app` for release builds.
 
