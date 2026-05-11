@@ -225,7 +225,7 @@ def capybara_session_users() -> list[str]:
         result = subprocess.run(
             ["getent", "passwd"], check=True, capture_output=True, text=True
         )
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, FileNotFoundError):
         return []
     users = []
     for line in result.stdout.splitlines():
