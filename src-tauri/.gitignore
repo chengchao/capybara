@@ -8,3 +8,6 @@
 
 # Vendored Lima (fetched via scripts/fetch-lima.sh)
 /vendor/
+
+# Tauri sidecar binaries (e.g. bun-<target-triple>); fetched, not committed
+/binaries/bun-*
