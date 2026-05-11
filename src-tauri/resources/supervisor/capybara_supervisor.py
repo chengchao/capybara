@@ -218,6 +218,33 @@ def kill_session_processes(user: str) -> None:
         raise RuntimeError(f"failed to kill session processes for {user}")
 
 
+# Enumerated from passwd (not the on-disk sessions dir) so we only act on
+# users this supervisor would otherwise manage.
+def capybara_session_users() -> list[str]:
+    try:
+        result = subprocess.run(
+            ["getent", "passwd"], check=True, capture_output=True, text=True
+        )
+    except subprocess.CalledProcessError:
+        return []
+    users = []
+    for line in result.stdout.splitlines():
+        name = line.split(":", 1)[0]
+        if name.startswith("capybara_"):
+            users.append(name)
+    return users
+
+
+# Sudo's reparent-to-init behavior means bwrap children can outlive a crashed
+# supervisor. SIGKILL strays; do NOT userdel or rm -rf — sessions are
+# persistent and the user/dir belong to the next supervisor instance.
+def kill_stale_session_processes() -> None:
+    for user in capybara_session_users():
+        if has_user_processes(user):
+            log("stale processes for", user, "— sending SIGKILL")
+            signal_user_processes(user, signal.SIGKILL)
+
+
 def load_mounts(session_id: str) -> dict[str, dict[str, Any]]:
     path = mounts_path(session_id)
     try:
@@ -521,6 +548,7 @@ def write_response(response: JsonDict) -> None:
 
 def main() -> None:
     log("started")
+    kill_stale_session_processes()
     for line in sys.stdin:
         if not line.strip():
             continue

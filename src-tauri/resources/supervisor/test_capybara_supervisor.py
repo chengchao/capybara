@@ -2,6 +2,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 import importlib.util
 from pathlib import Path
 
@@ -558,3 +559,36 @@ def test_delete_session_removes_user_group_and_state():
     finally:
         cleanup_session(proc, "delete")
         shutdown(proc)
+
+
+def test_startup_sweep_kills_orphan_session_processes():
+    if not integration_enabled():
+        return
+
+    user = "capybara_orphan"
+    subprocess.run(["userdel", "-f", user], capture_output=True)
+    subprocess.run(["useradd", "-M", user], check=True)
+    try:
+        orphan = subprocess.Popen(
+            ["sleep", "999"],
+            user=user,
+            start_new_session=True,
+        )
+        try:
+            for _ in range(40):
+                if has_process_for_user_containing(user, "sleep"):
+                    break
+                time.sleep(0.05)
+            assert has_process_for_user_containing(user, "sleep")
+
+            capybara_supervisor.kill_stale_session_processes()
+
+            returncode = orphan.wait(timeout=2)
+            assert returncode != 0, "orphan should have exited via signal"
+            assert user_exists(user), "sweep must not remove the session user"
+        finally:
+            if orphan.poll() is None:
+                orphan.kill()
+                orphan.wait()
+    finally:
+        subprocess.run(["userdel", "-f", user], capture_output=True)
