@@ -16,6 +16,9 @@ __pycache__/
 *.pyc
 .pytest_cache/
 
+# Claude Code: project-local worktrees, plans, and scratch
+.claude/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
