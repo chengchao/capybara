@@ -218,6 +218,39 @@ def kill_session_processes(user: str) -> None:
         raise RuntimeError(f"failed to kill session processes for {user}")
 
 
+# Enumerated from passwd (not the on-disk sessions dir) so we only act on
+# users this supervisor would otherwise manage.
+def capybara_session_users() -> list[str]:
+    try:
+        result = subprocess.run(
+            ["getent", "passwd"], check=True, capture_output=True, text=True
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return []
+    users = []
+    for line in result.stdout.splitlines():
+        name = line.split(":", 1)[0]
+        if name.startswith("capybara_"):
+            users.append(name)
+    return users
+
+
+# Sudo's reparent-to-init behavior means bwrap children can outlive a crashed
+# supervisor. SIGKILL strays; do NOT userdel or rm -rf — sessions are
+# persistent and the user/dir belong to the next supervisor instance.
+#
+# Driven by the cleanup_orphans RPC, not by main() startup: under Pattern 2,
+# Rust's control-plane supervisor and Bun's exec supervisor are both alive
+# concurrently, so an unconditional startup sweep would trash the other's
+# in-flight bwrap children. The host calls cleanup_orphans only on Rust's
+# supervisor, exactly once, before Bun spawns its supervisor.
+def kill_stale_session_processes() -> None:
+    for user in capybara_session_users():
+        if has_user_processes(user):
+            log("stale processes for", user, "— sending SIGKILL")
+            signal_user_processes(user, signal.SIGKILL)
+
+
 def load_mounts(session_id: str) -> dict[str, dict[str, Any]]:
     path = mounts_path(session_id)
     try:
@@ -505,12 +538,18 @@ def handle_shutdown(_params: JsonDict) -> JsonDict:
     return {"ok": True, "shutdown": True}
 
 
+def handle_cleanup_orphans(_params: JsonDict) -> JsonDict:
+    kill_stale_session_processes()
+    return {"ok": True}
+
+
 METHODS: dict[str, Callable[[JsonDict], JsonDict]] = {
     "ping": handle_ping,
     "create_session": handle_create_session,
     "connect_directory": handle_connect_directory,
     "delete_session": handle_delete_session,
     "run_as_session": handle_run_as_session,
+    "cleanup_orphans": handle_cleanup_orphans,
     "shutdown": handle_shutdown,
 }
 

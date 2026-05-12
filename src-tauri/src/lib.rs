@@ -16,7 +16,6 @@ pub fn run() {
             vm::get_vm_status,
             vm::create_session,
             vm::connect_directory,
-            vm::run_as_session,
             vm::delete_session,
             agent::start_agent_task,
         ])
@@ -45,6 +44,7 @@ pub fn run() {
             let handle = handle.clone();
             tauri::async_runtime::block_on(async move {
                 agent::stop_agent(&handle).await;
+                vm::stop_supervisor(&handle).await;
                 let _ = tokio::time::timeout(Duration::from_secs(10), vm::stop_vm(&handle)).await;
             });
         }

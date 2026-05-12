@@ -1,8 +1,23 @@
+import { SupervisorClient } from "./supervisor";
+
 type RequestMessage = {
   id?: string;
   method?: string;
   params?: unknown;
 };
+
+type RunResult = {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+  timedOut: boolean;
+};
+
+// Smoke-test session for the pre-PR-E wiring. The real LLM-driven loop in
+// PR-E will manage sessions on its own; for now we just bash the prompt.
+const PROBE_SESSION_ID = "agent_probe";
+
+const supervisor = new SupervisorClient();
 
 function send(value: unknown): Promise<number> {
   return Bun.write(Bun.stdout, `${JSON.stringify(value)}\n`);
@@ -25,6 +40,10 @@ async function handleLine(line: string) {
 
   if (request.method === "shutdown") {
     await send({ id: request.id, ok: true, result: { ok: true } });
+    await Promise.race([
+      supervisor.shutdown(),
+      new Promise<void>((resolve) => setTimeout(resolve, 500)),
+    ]);
     process.exit(0);
   }
 
@@ -38,15 +57,32 @@ async function handleLine(line: string) {
     fail(request.id, "prompt is required");
     return;
   }
+  const prompt = params.prompt;
 
   const taskId = crypto.randomUUID();
   send({ id: request.id, ok: true, result: { taskId } });
   send({ event: "task_started", taskId });
-  send({
-    event: "assistant_message",
-    taskId,
-    text: "Agent sidecar is running. Tool wiring comes next.",
-  });
+
+  try {
+    await supervisor.request("create_session", { session_id: PROBE_SESSION_ID });
+    const result = (await supervisor.request("run_as_session", {
+      session_id: PROBE_SESSION_ID,
+      command: prompt,
+      cwd: "/workspace",
+      timeout_ms: 30000,
+    })) as RunResult;
+    const text =
+      result.exitCode === 0
+        ? result.stdout || "(no output)"
+        : `[exit ${result.exitCode}] ${result.stderr || result.stdout}`;
+    send({ event: "assistant_message", taskId, text });
+  } catch (error) {
+    send({
+      event: "assistant_message",
+      taskId,
+      text: `error: ${(error as Error).message}`,
+    });
+  }
   send({ event: "task_finished", taskId });
 }
 
