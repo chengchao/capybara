@@ -150,14 +150,40 @@ where
 {
     let state = app.state::<VmState>();
     let mut guard = state.supervisor.lock().await;
-    let client = guard.as_mut().ok_or_else(|| {
-        VmError::SupervisorProtocol(
-            "supervisor not initialized; VM is still starting or failed to boot".into(),
-        )
-    })?;
-    let value = client
+
+    if guard.is_none() {
+        // ensure_vm installs the handle as its final step before emitting
+        // VmStatus::Running, so a None guard while Running means a prior
+        // request poisoned the channel — respawn. We don't re-run
+        // cleanup_orphans here: it's a boot-only operation, and Bun's
+        // supervisor may now be alive concurrently.
+        let status = state.status.lock().unwrap().clone();
+        if !matches!(status, VmStatus::Running) {
+            return Err(VmError::SupervisorProtocol(
+                "supervisor not initialized; VM is still starting or failed to boot".into(),
+            ));
+        }
+        let paths = LimaPaths::resolve(app)?;
+        let client = SupervisorClient::start(&paths).await?;
+        *guard = Some(client);
+    }
+
+    let client = guard.as_mut().expect("populated above");
+    let result = client
         .request(method, params, SUPERVISOR_RESPONSE_TIMEOUT)
-        .await?;
+        .await;
+    let value = match result {
+        Ok(v) => v,
+        Err(error) => {
+            // Errors may leave stdout offset (late response, partial line,
+            // EOF). Drop the handle so the next request respawns instead
+            // of reading the stale response. Clean supervisor-side errors
+            // pay the same ~200ms respawn cost — trivial vs. distinguishing
+            // variants.
+            *guard = None;
+            return Err(error);
+        }
+    };
     serde_json::from_value(value).map_err(VmError::SupervisorJson)
 }
 

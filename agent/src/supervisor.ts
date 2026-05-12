@@ -79,25 +79,34 @@ export class SupervisorClient {
   }
 
   private async send(method: string, params: unknown): Promise<unknown> {
-    const id = String(++this.nextId);
-    const payload = JSON.stringify({ id, method, params }) + "\n";
-    this.proc!.stdin.write(payload);
-    await this.proc!.stdin.flush();
+    try {
+      const id = String(++this.nextId);
+      const payload = JSON.stringify({ id, method, params }) + "\n";
+      this.proc!.stdin.write(payload);
+      await this.proc!.stdin.flush();
 
-    const next = await this.lines!.next();
-    if (next.done) {
-      throw new Error("supervisor exited without responding");
+      const next = await this.lines!.next();
+      if (next.done) {
+        throw new Error("supervisor exited without responding");
+      }
+      const response = JSON.parse(next.value) as RpcResponse;
+      if (response.id !== id) {
+        throw new Error(
+          `supervisor response id mismatch: expected ${id}, got ${response.id ?? "null"}`,
+        );
+      }
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+      return response.result;
+    } catch (error) {
+      // Errors may leave stdout offset (late response, partial line, EOF).
+      // Drop the proc handle so the next request respawns instead of
+      // reading the stale response. ensureStarted will spawn fresh.
+      this.proc = null;
+      this.lines = null;
+      throw error;
     }
-    const response = JSON.parse(next.value) as RpcResponse;
-    if (response.id !== id) {
-      throw new Error(
-        `supervisor response id mismatch: expected ${id}, got ${response.id ?? "null"}`,
-      );
-    }
-    if (response.error) {
-      throw new Error(response.error.message);
-    }
-    return response.result;
   }
 }
 

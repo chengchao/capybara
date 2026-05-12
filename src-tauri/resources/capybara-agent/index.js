@@ -58,23 +58,29 @@ class SupervisorClient {
     this.lines = lineIterator(this.proc.stdout);
   }
   async send(method, params) {
-    const id = String(++this.nextId);
-    const payload = JSON.stringify({ id, method, params }) + `
+    try {
+      const id = String(++this.nextId);
+      const payload = JSON.stringify({ id, method, params }) + `
 `;
-    this.proc.stdin.write(payload);
-    await this.proc.stdin.flush();
-    const next = await this.lines.next();
-    if (next.done) {
-      throw new Error("supervisor exited without responding");
+      this.proc.stdin.write(payload);
+      await this.proc.stdin.flush();
+      const next = await this.lines.next();
+      if (next.done) {
+        throw new Error("supervisor exited without responding");
+      }
+      const response = JSON.parse(next.value);
+      if (response.id !== id) {
+        throw new Error(`supervisor response id mismatch: expected ${id}, got ${response.id ?? "null"}`);
+      }
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+      return response.result;
+    } catch (error) {
+      this.proc = null;
+      this.lines = null;
+      throw error;
     }
-    const response = JSON.parse(next.value);
-    if (response.id !== id) {
-      throw new Error(`supervisor response id mismatch: expected ${id}, got ${response.id ?? "null"}`);
-    }
-    if (response.error) {
-      throw new Error(response.error.message);
-    }
-    return response.result;
   }
 }
 function requireEnv(key) {
