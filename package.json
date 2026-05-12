@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "main": "electron/dist/main.cjs",
   "workspaces": [
     "agent"
   ],
@@ -10,10 +11,13 @@
     "setup:runtimes": "bun run ./src-tauri/scripts/fetch-runtimes.ts",
     "build:agent": "bun run --cwd agent build",
     "check:agent": "bun run --cwd agent check",
+    "check:electron": "tsc --noEmit -p electron",
+    "build:electron": "bun build electron/main.ts --target=node --format=cjs --outfile electron/dist/main.cjs && bun build electron/preload.ts --target=node --format=cjs --outfile electron/dist/preload.cjs",
     "dev": "vite",
     "build": "bun run check:agent && bun run build:agent && tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "electron:dev": "concurrently -k -n vite,elec \"bun run dev\" \"wait-on http://localhost:1420 && bun run build:electron && ELECTRON_DEV_URL=http://localhost:1420 electron .\"",
     "test:supervisor:image": "docker build -f src-tauri/resources/supervisor/Dockerfile.test -t capybara-supervisor-test src-tauri/resources/supervisor",
     "test:supervisor": "docker run --rm --privileged -v \"$PWD/src-tauri/resources/supervisor:/app:ro\" -w /app capybara-supervisor-test sh -lc 'CAPYBARA_SUPERVISOR_INTEGRATION=1 pytest -q -p no:cacheprovider'"
   },
@@ -24,11 +28,15 @@
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.11.0",
+    "@types/node": "^25.7.0",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "concurrently": "^9.2.1",
+    "electron": "^42.0.1",
     "typescript": "~5.8.3",
     "vite": "^7.0.4",
-    "@tauri-apps/cli": "^2.11.0"
+    "wait-on": "^9.0.10"
   }
 }
