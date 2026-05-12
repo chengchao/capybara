@@ -26,7 +26,7 @@ exports.default = async function beforePack(context) {
   if (!triple) {
     throw new Error(`beforePack: no Bun mapping for ${platform}/${arch}`);
   }
-  const src = path.join(__dirname, "..", "src-tauri", "binaries", `bun-${triple}`);
+  const src = path.join(__dirname, "..", "binaries", `bun-${triple}`);
   const dst = path.join(__dirname, "bun");
   try {
     await fs.access(src, fsConst.X_OK);

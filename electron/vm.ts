@@ -57,11 +57,11 @@ let cachedPaths: LimaPaths | null = null;
 
 function paths(): LimaPaths {
   if (cachedPaths) return cachedPaths;
-  // Dev: vendor/ and resources/ still live under src-tauri/ (Phase 8 moves them).
-  // Prod: process.resourcesPath after electron-builder packaging.
+  // Dev: vendor/ and resources/ live at project root. Prod:
+  // process.resourcesPath after electron-builder packaging.
   const resourceDir = app.isPackaged
     ? process.resourcesPath
-    : path.join(app.getAppPath(), "src-tauri");
+    : app.getAppPath();
   // LIMA_HOME must stay short on macOS: Lima writes `<LIMA_HOME>/<instance>/ssh.sock.<PID>`,
   // bounded by UNIX_PATH_MAX (104). `~/Library/Application Support/<bundle-id>/lima/`
   // already pushes that to ~107 with a 16-digit PID, so anchor at `~/.capybara/lima`.

@@ -18,12 +18,12 @@
   ],
   "extraResources": [
     {
-      "from": "src-tauri/vendor/lima",
+      "from": "vendor/lima",
       "to": "vendor/lima"
     },
     {
-      "from": "src-tauri/resources/supervisor/capybara_supervisor.py",
-      "to": "supervisor/capybara_supervisor.py"
+      "from": "resources/supervisor/capybara_supervisor.py",
+      "to": "resources/supervisor/capybara_supervisor.py"
     },
     {
       "from": "build/bun",

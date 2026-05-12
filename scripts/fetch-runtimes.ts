@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
-// Fetches the runtimes pinned in src-tauri/runtime-manifest.json into
-// src-tauri/{binaries,vendor}. Idempotent: re-runs are no-ops once the
-// expected files exist. `sha256` in the manifest is the source of truth
-// for what we trust; mismatch aborts the run.
+// Fetches the runtimes pinned in runtime-manifest.json into
+// {binaries,vendor}. Idempotent: re-runs are no-ops once the expected
+// files exist. `sha256` in the manifest is the source of truth for what we
+// trust; mismatch aborts the run.
 
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
@@ -18,8 +18,8 @@ type RuntimeEntry = {
 type Manifest = Record<string, RuntimeEntry>;
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
-const SRC_TAURI = join(SCRIPT_DIR, "..");
-const MANIFEST_PATH = join(SRC_TAURI, "runtime-manifest.json");
+const PROJECT_ROOT = join(SCRIPT_DIR, "..");
+const MANIFEST_PATH = join(PROJECT_ROOT, "runtime-manifest.json");
 
 async function main() {
   const target = await hostTriple();
@@ -74,9 +74,9 @@ async function installRuntime(
 function isInstalled(name: string, target: string): boolean {
   switch (name) {
     case "bun":
-      return existsSync(join(SRC_TAURI, "binaries", `bun-${target}`));
+      return existsSync(join(PROJECT_ROOT, "binaries", `bun-${target}`));
     case "lima":
-      return existsSync(join(SRC_TAURI, "vendor", "lima", "bin", "limactl"));
+      return existsSync(join(PROJECT_ROOT, "vendor", "lima", "bin", "limactl"));
     default:
       die(`unknown runtime '${name}'`);
   }
@@ -99,13 +99,13 @@ async function extract(
       await run(["unzip", "-q", archive, "-d", stage]);
       const arch = target.startsWith("aarch64") ? "aarch64" : "x64";
       const src = join(stage, `bun-darwin-${arch}`, "bun");
-      const dest = join(SRC_TAURI, "binaries", `bun-${target}`);
+      const dest = join(PROJECT_ROOT, "binaries", `bun-${target}`);
       await mkdir(dirname(dest), { recursive: true });
       await run(["install", "-m", "0755", src, dest]);
       return;
     }
     case "lima": {
-      const dest = join(SRC_TAURI, "vendor", "lima");
+      const dest = join(PROJECT_ROOT, "vendor", "lima");
       await mkdir(dest, { recursive: true });
       await run(["tar", "-xzf", archive, "-C", dest]);
       return;

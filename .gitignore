@@ -12,7 +12,8 @@ dist
 dist-ssr
 release
 build/bun
-src-tauri/binaries/bun-*
+binaries/
+vendor/
 *.local
 __pycache__/
 *.pyc
