@@ -5,6 +5,20 @@ export type AgentEvent =
   | { event: "agent_ready" }
   | { event: "task_started"; taskId: string }
   | { event: "assistant_message"; taskId: string; text: string }
+  | {
+      event: "tool_use";
+      taskId: string;
+      tool: string;
+      input: unknown;
+      toolUseId: string;
+    }
+  | {
+      event: "tool_result";
+      taskId: string;
+      toolUseId: string;
+      content: unknown;
+      isError: boolean;
+    }
   | { event: "task_finished"; taskId: string }
   | { event: "agent_exited"; code: number | null; signal: number | null }
   | { event: "agent_protocol_error"; error: string; line: string }

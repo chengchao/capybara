@@ -82,6 +82,11 @@ async fn start_agent(app: &AppHandle) -> Result<AgentProcess, AgentError> {
     let lima = crate::vm::lima_env(app).map_err(AgentError::LimaPaths)?;
     let limactl = lima.limactl_path.to_string_lossy().into_owned();
     let lima_home = lima.lima_home.to_string_lossy().into_owned();
+    // tauri-plugin-shell's sidecar() doesn't reliably inherit the host env
+    // (esp. in macOS .app bundles), so forward the agent SDK's auth key
+    // explicitly. Missing-key is surfaced by the SDK at first task with a
+    // clear auth error.
+    let anthropic_api_key = std::env::var("ANTHROPIC_API_KEY").unwrap_or_default();
 
     let (mut rx, child) = app
         .shell()
@@ -91,6 +96,7 @@ async fn start_agent(app: &AppHandle) -> Result<AgentProcess, AgentError> {
         .env("CAPYBARA_LIMACTL", limactl)
         .env("LIMA_HOME", lima_home)
         .env("CAPYBARA_LIMA_INSTANCE", lima.instance_name)
+        .env("ANTHROPIC_API_KEY", anthropic_api_key)
         .spawn()
         .map_err(AgentError::Shell)?;
 
