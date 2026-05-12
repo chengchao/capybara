@@ -5,6 +5,8 @@ import {
 } from "@anthropic-ai/claude-agent-sdk";
 import { createRequire } from "node:module";
 import { existsSync } from "node:fs";
+import path from "node:path";
+import { app } from "electron";
 import { getSupervisor } from "../vm";
 import { buildTools, SESSION_ID } from "./tools";
 
@@ -60,6 +62,19 @@ function resolveClaudeCli(): string {
     if (existsSync(unpackedPath)) return unpackedPath;
   }
   return cliPath;
+}
+
+// The SDK spawns `bun` / `node` / `deno` (just the executable name) to run
+// cli.js. End users don't have any of those on PATH — Electron's
+// process.execPath is the Electron binary itself, not a JS runtime. We bundle
+// a per-arch Bun binary as an extraResource and prepend its dir to PATH so
+// `executable: "bun"` resolves.
+let pathPrepended = false;
+function ensureBundledBunOnPath(): void {
+  if (pathPrepended || !app.isPackaged) return;
+  const bundledDir = process.resourcesPath;
+  process.env.PATH = `${bundledDir}${path.delimiter}${process.env.PATH ?? ""}`;
+  pathPrepended = true;
 }
 
 function stripToolPrefix(name: string): string {
@@ -127,12 +142,14 @@ export async function runAgentTask(
     await supervisor.request("create_session", { session_id: SESSION_ID });
 
     const mcp = ensureSessionAndMcp();
+    ensureBundledBunOnPath();
     const options: Options = {
       model: MODEL,
       systemPrompt: SYSTEM_PROMPT,
       mcpServers: { capybara: mcp },
       allowedTools: ALLOWED_TOOLS,
       pathToClaudeCodeExecutable: resolveClaudeCli(),
+      executable: app.isPackaged ? "bun" : "node",
       abortController,
     };
 

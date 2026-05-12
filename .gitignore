@@ -10,6 +10,8 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+release
+build/bun
 src-tauri/binaries/bun-*
 *.local
 __pycache__/
