@@ -187,6 +187,30 @@ Response:
 {"id":"1","result":{"ok":true,"shutdown":true}}
 ```
 
+### cleanup_orphans
+
+SIGKILLs any process owned by a `capybara_*` user — bwrap children that
+outlived a crashed supervisor in a previous app session. User accounts and
+on-disk session state are left intact.
+
+**Caller responsibility:** call this only when no other supervisor instance
+is alive. Today the host (`vm.rs::ensure_vm`) invokes it once after spawning
+its long-lived supervisor channel, before the agent sidecar's supervisor has
+been started. Calling it concurrently with another supervisor's `run_as_session`
+would trash that supervisor's in-flight bwrap child.
+
+Request:
+
+```json
+{"id":"1","method":"cleanup_orphans","params":{}}
+```
+
+Response:
+
+```json
+{"id":"1","result":{"ok":true}}
+```
+
 ## Sandbox Contract
 
 Commands see:

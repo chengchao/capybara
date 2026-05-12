@@ -79,11 +79,18 @@ async fn start_agent(app: &AppHandle) -> Result<AgentProcess, AgentError> {
     let paths = AgentPaths::resolve(app)?;
     ensure_file(&paths.agent_js)?;
 
+    let lima = crate::vm::lima_env(app).map_err(AgentError::LimaPaths)?;
+    let limactl = lima.limactl_path.to_string_lossy().into_owned();
+    let lima_home = lima.lima_home.to_string_lossy().into_owned();
+
     let (mut rx, child) = app
         .shell()
         .sidecar(BUN_SIDECAR)
         .map_err(AgentError::Shell)?
         .arg(&paths.agent_js)
+        .env("CAPYBARA_LIMACTL", limactl)
+        .env("LIMA_HOME", lima_home)
+        .env("CAPYBARA_LIMA_INSTANCE", lima.instance_name)
         .spawn()
         .map_err(AgentError::Shell)?;
 
@@ -224,6 +231,9 @@ enum AgentError {
 
     #[error("agent sidecar failed: {0}")]
     Shell(#[source] tauri_plugin_shell::Error),
+
+    #[error("could not resolve lima paths: {0}")]
+    LimaPaths(#[source] crate::vm::VmError),
 }
 
 #[cfg(test)]

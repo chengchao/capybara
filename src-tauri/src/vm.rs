@@ -42,12 +42,17 @@ const VM_STATUS_EVENT: &str = "vm-status";
 
 pub struct VmState {
     status: Mutex<VmStatus>,
+    // Long-lived supervisor channel. Populated by `ensure_vm`; consumed on
+    // `RunEvent::Exit` via `stop_supervisor`. tokio::sync::Mutex so a
+    // request can hold the lock across .await without deadlocking the runtime.
+    supervisor: tokio::sync::Mutex<Option<SupervisorClient>>,
 }
 
 impl Default for VmState {
     fn default() -> Self {
         Self {
             status: Mutex::new(VmStatus::Starting),
+            supervisor: tokio::sync::Mutex::new(None),
         }
     }
 }
@@ -75,15 +80,6 @@ pub struct CreateSessionResult {
 #[serde(rename_all = "camelCase")]
 pub struct ConnectDirectoryResult {
     pub guest_path: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RunSessionResult {
-    pub exit_code: i32,
-    pub stdout: String,
-    pub stderr: String,
-    pub timed_out: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -133,30 +129,6 @@ pub async fn connect_directory(
 }
 
 #[tauri::command]
-pub async fn run_as_session(
-    app: AppHandle,
-    session_id: String,
-    command: String,
-    cwd: Option<String>,
-    timeout_ms: Option<u64>,
-) -> Result<RunSessionResult, String> {
-    let timeout_ms = timeout_ms.unwrap_or(60_000);
-    request_supervisor_with_timeout(
-        &app,
-        "run_as_session",
-        json!({
-            "session_id": session_id,
-            "command": command,
-            "cwd": cwd.unwrap_or_else(|| "/workspace".into()),
-            "timeout_ms": timeout_ms,
-        }),
-        command_response_timeout(timeout_ms),
-    )
-    .await
-    .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
 pub async fn delete_session(
     app: AppHandle,
     session_id: String,
@@ -176,24 +148,16 @@ async fn request_supervisor<T>(app: &AppHandle, method: &str, params: Value) -> 
 where
     T: for<'de> Deserialize<'de>,
 {
-    request_supervisor_with_timeout(app, method, params, SUPERVISOR_RESPONSE_TIMEOUT).await
-}
-
-async fn request_supervisor_with_timeout<T>(
-    app: &AppHandle,
-    method: &str,
-    params: Value,
-    response_timeout: Duration,
-) -> Result<T, VmError>
-where
-    T: for<'de> Deserialize<'de>,
-{
-    let paths = LimaPaths::resolve(app)?;
-    let mut client = SupervisorClient::start(&paths).await?;
-    let response = client.request(method, params, response_timeout).await;
-    let shutdown = client.shutdown().await;
-    let value = response?;
-    shutdown?;
+    let state = app.state::<VmState>();
+    let mut guard = state.supervisor.lock().await;
+    let client = guard.as_mut().ok_or_else(|| {
+        VmError::SupervisorProtocol(
+            "supervisor not initialized; VM is still starting or failed to boot".into(),
+        )
+    })?;
+    let value = client
+        .request(method, params, SUPERVISOR_RESPONSE_TIMEOUT)
+        .await?;
     serde_json::from_value(value).map_err(VmError::SupervisorJson)
 }
 
@@ -281,11 +245,50 @@ pub async fn ensure_vm(app: &AppHandle) -> Result<(), VmError> {
     smoke_test_host_mount(&paths).await?;
     ensure_bwrap(&paths).await?;
     install_supervisor(&paths).await?;
-    smoke_test_supervisor(&paths).await?;
+
+    let mut client = SupervisorClient::start(&paths).await?;
+    // Reap orphan bwrap children left by a previous app session's supervisor
+    // crash. Safe to do here because Bun's exec supervisor has not yet spawned
+    // (the agent sidecar starts only when a user task fires).
+    client
+        .request("cleanup_orphans", json!({}), SUPERVISOR_RESPONSE_TIMEOUT)
+        .await?;
+    smoke_test_supervisor(&mut client).await?;
+
+    *app.state::<VmState>().supervisor.lock().await = Some(client);
 
     emit_status(app, VmStatus::Running);
     eprintln!("vm: ready");
     Ok(())
+}
+
+// Lima context the Bun agent sidecar needs to spawn its own supervisor channel
+// (Pattern 2 — agent owns `run_as_session` directly, no Rust hop).
+pub struct LimaEnv {
+    pub limactl_path: PathBuf,
+    pub lima_home: PathBuf,
+    pub instance_name: &'static str,
+}
+
+pub fn lima_env(app: &AppHandle) -> Result<LimaEnv, VmError> {
+    let paths = LimaPaths::resolve(app)?;
+    Ok(LimaEnv {
+        limactl_path: paths.limactl,
+        lima_home: paths.lima_home,
+        instance_name: INSTANCE_NAME,
+    })
+}
+
+pub async fn stop_supervisor(app: &AppHandle) {
+    let Some(state) = app.try_state::<VmState>() else {
+        return;
+    };
+    let Some(client) = state.supervisor.lock().await.take() else {
+        return;
+    };
+    if let Err(error) = client.shutdown().await {
+        eprintln!("vm: supervisor shutdown failed: {error}");
+    }
 }
 
 async fn fs_create_dir_all(path: &Path) -> Result<(), VmError> {
@@ -450,9 +453,8 @@ async fn ensure_bwrap(paths: &LimaPaths) -> Result<(), VmError> {
     Ok(())
 }
 
-async fn smoke_test_supervisor(paths: &LimaPaths) -> Result<(), VmError> {
+async fn smoke_test_supervisor(client: &mut SupervisorClient) -> Result<(), VmError> {
     eprintln!("vm: testing supervisor...");
-    let mut client = SupervisorClient::start(paths).await?;
     client
         .request("ping", json!({}), SUPERVISOR_RESPONSE_TIMEOUT)
         .await?;
@@ -496,7 +498,6 @@ async fn smoke_test_supervisor(paths: &LimaPaths) -> Result<(), VmError> {
             SUPERVISOR_RESPONSE_TIMEOUT,
         )
         .await;
-    client.shutdown().await?;
     smoke_result?;
     cleanup_result?;
     Ok(())
