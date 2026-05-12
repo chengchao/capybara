@@ -22,10 +22,12 @@
     "test:supervisor": "docker run --rm --privileged -v \"$PWD/src-tauri/resources/supervisor:/app:ro\" -w /app capybara-supervisor-test sh -lc 'CAPYBARA_SUPERVISOR_INTEGRATION=1 pytest -q -p no:cacheprovider'"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.139",
     "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/plugin-opener": "^2.5.3",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.0",

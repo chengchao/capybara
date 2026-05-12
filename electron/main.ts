@@ -1,6 +1,8 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, ipcMain } from "electron";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { ensureVm, setStatusEmitter, stopSupervisor, stopVm } from "./vm";
+import { runAgentTask } from "./agent/runTask";
 
 const DEV_URL = process.env.ELECTRON_DEV_URL;
 
@@ -9,6 +11,7 @@ if (!gotLock) {
   app.quit();
 } else {
   let mainWindow: BrowserWindow | null = null;
+  const activeTasks = new Map<string, AbortController>();
 
   app.on("second-instance", () => {
     if (mainWindow) {
@@ -16,6 +19,25 @@ if (!gotLock) {
       mainWindow.focus();
     }
   });
+
+  ipcMain.handle(
+    "start-agent-task",
+    async (event, prompt: unknown): Promise<{ taskId: string }> => {
+      if (typeof prompt !== "string" || prompt.trim() === "") {
+        throw new Error("prompt is required");
+      }
+      const taskId = randomUUID();
+      const controller = new AbortController();
+      activeTasks.set(taskId, controller);
+      runAgentTask(
+        prompt,
+        taskId,
+        (msg) => event.sender.send("agent-event", msg),
+        controller,
+      ).finally(() => activeTasks.delete(taskId));
+      return { taskId };
+    },
+  );
 
   app.whenReady().then(async () => {
     mainWindow = new BrowserWindow({
@@ -56,6 +78,7 @@ if (!gotLock) {
     if (isShuttingDown) return;
     isShuttingDown = true;
     event.preventDefault();
+    for (const controller of activeTasks.values()) controller.abort();
     await stopSupervisor();
     await Promise.race([
       stopVm(),
