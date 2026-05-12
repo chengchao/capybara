@@ -1,7 +1,14 @@
 import { app, BrowserWindow, ipcMain } from "electron";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { ensureVm, setStatusEmitter, stopSupervisor, stopVm } from "./vm";
+import {
+  ensureVm,
+  getVmStatus,
+  requestSupervisor,
+  setStatusEmitter,
+  stopSupervisor,
+  stopVm,
+} from "./vm";
 import { runAgentTask } from "./agent/runTask";
 
 const DEV_URL = process.env.ELECTRON_DEV_URL;
@@ -18,6 +25,39 @@ if (!gotLock) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
     }
+  });
+
+  ipcMain.handle("get-vm-status", () => getVmStatus());
+
+  ipcMain.handle("create-session", (_e, sessionId: unknown) => {
+    if (typeof sessionId !== "string") throw new Error("session_id required");
+    return requestSupervisor("create_session", { session_id: sessionId });
+  });
+
+  ipcMain.handle(
+    "connect-directory",
+    (
+      _e,
+      args: {
+        sessionId: string;
+        hostPath: string;
+        mountName: string;
+        writable: boolean;
+        replace: boolean;
+      },
+    ) =>
+      requestSupervisor("connect_directory", {
+        session_id: args.sessionId,
+        host_path: args.hostPath,
+        mount_name: args.mountName,
+        writable: args.writable,
+        replace: args.replace,
+      }),
+  );
+
+  ipcMain.handle("delete-session", (_e, sessionId: unknown) => {
+    if (typeof sessionId !== "string") throw new Error("session_id required");
+    return requestSupervisor("delete_session", { session_id: sessionId });
   });
 
   ipcMain.handle(

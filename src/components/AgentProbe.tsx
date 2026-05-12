@@ -8,18 +8,13 @@ export default function AgentProbe() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    // listen() is async — return its promise's `.then(fn => fn())` so the
-    // unsubscribe runs as soon as it resolves, even if cleanup beat the
-    // subscription handshake.
-    const subscription = subscribeAgentEvents((event) => {
+    const unsubscribe = subscribeAgentEvents((event) => {
       setEvents((prev) => [
         JSON.stringify(event, null, 2),
         ...prev,
       ].slice(0, 20));
     });
-    return () => {
-      subscription.then((unlisten) => unlisten());
-    };
+    return unsubscribe;
   }, []);
 
   async function runAgent() {
