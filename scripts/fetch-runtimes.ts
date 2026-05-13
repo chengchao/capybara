@@ -22,7 +22,7 @@ const PROJECT_ROOT = join(SCRIPT_DIR, "..");
 const MANIFEST_PATH = join(PROJECT_ROOT, "runtime-manifest.json");
 
 async function main() {
-  const target = await hostTriple();
+  const target = hostTriple();
   const manifest = (await Bun.file(MANIFEST_PATH).json()) as Manifest;
   const tmp = await mkdtemp(join(tmpdir(), "capybara-runtimes-"));
   try {
@@ -114,11 +114,25 @@ async function extract(
   die(`unknown runtime '${name}'`);
 }
 
-async function hostTriple(): Promise<string> {
-  const out = await runCapture(["rustc", "--print", "host-tuple"]);
-  const triple = out.trim();
-  if (!triple) die("rustc --print host-tuple returned empty output");
-  return triple;
+// Maps Node's process.{platform,arch} to a Rust host-tuple-shaped triple.
+// Keeping the Rust-style triple in the manifest keeps it portable to other
+// tools that already speak that format (rustc, Tauri's externalBin, etc.).
+const RUST_ARCH: Record<string, string> = {
+  arm64: "aarch64",
+  x64: "x86_64",
+};
+const RUST_PLATFORM_SUFFIX: Record<string, string> = {
+  darwin: "apple-darwin",
+  linux: "unknown-linux-gnu",
+};
+
+function hostTriple(): string {
+  const arch = RUST_ARCH[process.arch];
+  const platform = RUST_PLATFORM_SUFFIX[process.platform];
+  if (!arch || !platform) {
+    die(`unsupported host: ${process.platform}/${process.arch}`);
+  }
+  return `${arch}-${platform}`;
 }
 
 async function sha256File(path: string): Promise<string> {
@@ -149,19 +163,6 @@ async function run(argv: string[]) {
   const proc = Bun.spawn(argv, { stdout: "inherit", stderr: "inherit" });
   const code = await proc.exited;
   if (code !== 0) die(`command failed (exit ${code}): ${argv.join(" ")}`);
-}
-
-async function runCapture(argv: string[]): Promise<string> {
-  const proc = Bun.spawn(argv, { stdout: "pipe", stderr: "pipe" });
-  const [stdout, stderr, code] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ]);
-  if (code !== 0) {
-    die(`command failed (exit ${code}): ${argv.join(" ")}\n${stderr.trim()}`);
-  }
-  return stdout;
 }
 
 function basename(p: string): string {

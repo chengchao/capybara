@@ -3,12 +3,13 @@
 //
 // The Bun binary serves as the SDK's `executable` arg at runtime — end users
 // don't have `node` on PATH, and Electron's process.execPath is the
-// Electron binary itself, not a node interpreter. See pheuter/claude-agent-desktop
+// Electron binary itself, not a JS runtime. See pheuter/claude-agent-desktop
 // for the same pattern.
 
 const path = require("node:path");
 const fs = require("node:fs/promises");
 const fsConst = require("node:fs").constants;
+const { Arch } = require("builder-util");
 
 const ARCH_TO_RUST_TRIPLE = {
   darwin: { arm64: "aarch64-apple-darwin", x64: "x86_64-apple-darwin" },
@@ -16,11 +17,7 @@ const ARCH_TO_RUST_TRIPLE = {
 };
 
 exports.default = async function beforePack(context) {
-  const arch = context.arch === 1 ? "ia32"
-    : context.arch === 2 ? "x64"
-    : context.arch === 3 ? "armv7l"
-    : context.arch === 4 ? "arm64"
-    : "unknown";
+  const arch = Arch[context.arch];
   const platform = process.platform;
   const triple = ARCH_TO_RUST_TRIPLE[platform]?.[arch];
   if (!triple) {
