@@ -20,10 +20,40 @@ if (!gotLock) {
   let mainWindow: BrowserWindow | null = null;
   const activeTasks = new Map<string, AbortController>();
 
+  function createMainWindow() {
+    mainWindow = new BrowserWindow({
+      width: 1024,
+      height: 720,
+      webPreferences: {
+        preload: path.join(__dirname, "preload.cjs"),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: false,
+      },
+    });
+    mainWindow.on("closed", () => {
+      mainWindow = null;
+    });
+    if (DEV_URL) {
+      mainWindow.loadURL(DEV_URL);
+      mainWindow.webContents.openDevTools({ mode: "detach" });
+    } else {
+      mainWindow.loadFile(
+        path.join(__dirname, "..", "..", "dist", "index.html"),
+      );
+    }
+  }
+
+  setStatusEmitter((status) => {
+    mainWindow?.webContents.send("vm-status", status);
+  });
+
   app.on("second-instance", () => {
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
+    } else {
+      createMainWindow();
     }
   });
 
@@ -79,39 +109,21 @@ if (!gotLock) {
     },
   );
 
-  app.whenReady().then(async () => {
-    mainWindow = new BrowserWindow({
-      width: 1024,
-      height: 720,
-      webPreferences: {
-        preload: path.join(__dirname, "preload.cjs"),
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: false,
-      },
-    });
-
-    setStatusEmitter((status) => {
-      mainWindow?.webContents.send("vm-status", status);
-    });
-
-    if (DEV_URL) {
-      await mainWindow.loadURL(DEV_URL);
-      mainWindow.webContents.openDevTools({ mode: "detach" });
-    } else {
-      await mainWindow.loadFile(
-        path.join(__dirname, "..", "..", "dist", "index.html"),
-      );
-    }
-
+  app.whenReady().then(() => {
+    createMainWindow();
     ensureVm().catch((e) => {
       process.stderr.write(`vm: ensure_vm failed: ${(e as Error).message}\n`);
     });
   });
 
-  app.on("window-all-closed", () => {
-    if (process.platform !== "darwin") app.quit();
+  // macOS convention: clicking the Dock icon on a running headless app
+  // recreates the window. Without this handler the user closes the only
+  // window and has no way back to the UI short of quitting via the menu.
+  app.on("activate", () => {
+    if (mainWindow === null) createMainWindow();
   });
+
+  app.on("window-all-closed", () => {});
 
   let isShuttingDown = false;
   app.on("before-quit", async (event) => {

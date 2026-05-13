@@ -1,5 +1,3 @@
-import "./host";
-
 export type CreateSessionResult = {
   sessionRoot: string;
   user: string;
