@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Capybara — Architecture</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --panel: #1e293b;
+    --panel-2: #334155;
+    --text: #e2e8f0;
+    --text-dim: #94a3b8;
+    --accent: #38bdf8;
+    --warn: #fbbf24;
+    --danger: #f87171;
+    --good: #4ade80;
+    --tier-renderer: #6366f1;
+    --tier-main: #14b8a6;
+    --tier-subprocess: #f59e0b;
+    --tier-vm: #ec4899;
+    --tier-sandbox: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    margin: 0;
+    padding: 32px 16px 64px;
+    line-height: 1.5;
+  }
+  header {
+    max-width: 1100px;
+    margin: 0 auto 32px;
+  }
+  h1 {
+    font-size: 28px;
+    margin: 0 0 8px;
+    letter-spacing: -0.02em;
+  }
+  .subtitle {
+    color: var(--text-dim);
+    font-size: 14px;
+  }
+  .legend {
+    max-width: 1100px;
+    margin: 0 auto 32px;
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    font-size: 12px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .legend-swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+  }
+  .arch {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .tier {
+    position: relative;
+    background: var(--panel);
+    border: 1px solid var(--panel-2);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 32px;
+  }
+  .tier::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: -28px;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+    border-top: 16px solid var(--panel-2);
+  }
+  .tier:last-of-type::after {
+    display: none;
+  }
+  .tier-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 700;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--panel-2);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .tier-label .swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+  }
+  .tier-label .runtime {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .tier h2 {
+    font-size: 18px;
+    margin: 0 0 16px;
+  }
+  .components {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+  }
+  .component {
+    background: var(--bg);
+    border: 1px solid var(--panel-2);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .component.boundary {
+    background: linear-gradient(180deg, var(--panel) 0%, rgba(248, 113, 113, 0.08) 100%);
+    border: 1px solid rgba(248, 113, 113, 0.35);
+  }
+  .component-name {
+    font-weight: 600;
+    font-size: 13px;
+    margin-bottom: 4px;
+    color: var(--text);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .component-role {
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .component-list {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    margin-top: 8px;
+    padding-left: 14px;
+  }
+  .component-list li {
+    margin-bottom: 2px;
+  }
+  .edge-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-align: center;
+    margin: -20px 0 12px;
+    padding: 4px 12px;
+    background: var(--bg);
+    display: inline-block;
+    position: relative;
+    left: 50%;
+    transform: translateX(-50%);
+    border-radius: 12px;
+    border: 1px solid var(--panel-2);
+    z-index: 1;
+  }
+  .tier-renderer .tier-label .swatch { background: var(--tier-renderer); }
+  .tier-main     .tier-label .swatch { background: var(--tier-main); }
+  .tier-subprocess .tier-label .swatch { background: var(--tier-subprocess); }
+  .tier-vm       .tier-label .swatch { background: var(--tier-vm); }
+  .tier-sandbox  .tier-label .swatch { background: var(--tier-sandbox); }
+
+  .tier-renderer   { border-top: 3px solid var(--tier-renderer); }
+  .tier-main       { border-top: 3px solid var(--tier-main); }
+  .tier-subprocess { border-top: 3px solid var(--tier-subprocess); }
+  .tier-vm         { border-top: 3px solid var(--tier-vm); }
+  .tier-sandbox    { border-top: 3px solid var(--tier-sandbox); }
+
+  .annotations {
+    max-width: 1100px;
+    margin: 48px auto 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .note {
+    background: var(--panel);
+    border: 1px solid var(--panel-2);
+    border-radius: 8px;
+    padding: 14px 16px;
+    font-size: 13px;
+  }
+  .note h3 {
+    font-size: 13px;
+    margin: 0 0 6px;
+    color: var(--accent);
+  }
+  .note p {
+    margin: 0;
+    color: var(--text-dim);
+  }
+  code {
+    background: var(--bg);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    color: var(--text);
+  }
+  .pipe-flow {
+    max-width: 1100px;
+    margin: 48px auto 0;
+    background: var(--panel);
+    border: 1px solid var(--panel-2);
+    border-radius: 8px;
+    padding: 16px 20px;
+  }
+  .pipe-flow h3 {
+    font-size: 14px;
+    margin: 0 0 12px;
+    color: var(--accent);
+  }
+  .pipe-flow ol {
+    margin: 0;
+    padding-left: 20px;
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .pipe-flow ol li {
+    margin-bottom: 6px;
+  }
+  .pipe-flow strong {
+    color: var(--text);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Capybara — Architecture</h1>
+  <div class="subtitle">Office-work agent. Electron + React + Claude Agent SDK on the host; Lima + bubblewrap in a VM for sandboxed execution.</div>
+</header>
+
+<div class="legend">
+  <div class="legend-item"><span class="legend-swatch" style="background: var(--tier-renderer)"></span>Renderer (Chromium)</div>
+  <div class="legend-item"><span class="legend-swatch" style="background: var(--tier-main)"></span>Main process (Node)</div>
+  <div class="legend-item"><span class="legend-swatch" style="background: var(--tier-subprocess)"></span>Spawned subprocesses</div>
+  <div class="legend-item"><span class="legend-swatch" style="background: var(--tier-vm)"></span>Lima VM (Linux)</div>
+  <div class="legend-item"><span class="legend-swatch" style="background: var(--tier-sandbox)"></span>Sandbox boundary</div>
+</div>
+
+<div class="arch">
+
+  <!-- Renderer -->
+  <div class="tier tier-renderer">
+    <div class="tier-label">
+      <span><span class="swatch"></span> &nbsp; Tier 1 — Renderer</span>
+      <span class="runtime">Chromium WebView · sandboxed · no Node</span>
+    </div>
+    <h2>React UI</h2>
+    <div class="components">
+      <div class="component">
+        <div class="component-name">AgentProbe.tsx</div>
+        <div class="component-role">Task prompt input + event log display.</div>
+      </div>
+      <div class="component">
+        <div class="component-name">VmStatusPill.tsx</div>
+        <div class="component-role">VM status indicator (starting / running / failed).</div>
+      </div>
+      <div class="component">
+        <div class="component-name">window.capybara</div>
+        <div class="component-role">contextBridge surface; the renderer's only door to the main process.</div>
+        <ul class="component-list">
+          <li>createSession / connectDirectory / deleteSession</li>
+          <li>startAgentTask</li>
+          <li>onVmStatus / onAgentEvent</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="edge-label">↕ Electron IPC · <code>ipcRenderer.invoke</code> / <code>webContents.send</code></div>
+
+  <!-- Main Process -->
+  <div class="tier tier-main">
+    <div class="tier-label">
+      <span><span class="swatch"></span> &nbsp; Tier 2 — Main Process</span>
+      <span class="runtime">Electron · Node 22 · all native + privileged ops</span>
+    </div>
+    <h2>electron/</h2>
+    <div class="components">
+      <div class="component">
+        <div class="component-name">main.ts</div>
+        <div class="component-role">App lifecycle. Single-instance lock. IPC handlers. AbortController per task. Drains supervisor + VM on before-quit.</div>
+      </div>
+      <div class="component">
+        <div class="component-name">preload.ts</div>
+        <div class="component-role">contextBridge bridge. Maps renderer's <code>window.capybara</code> calls to <code>ipcRenderer.invoke</code> / <code>.on</code>.</div>
+      </div>
+      <div class="component">
+        <div class="component-name">vm.ts</div>
+        <div class="component-role">VM + supervisor lifecycle.</div>
+        <ul class="component-list">
+          <li>ensureVm: limactl create/start, install supervisor.py</li>
+          <li>SupervisorClient: persistent JSON-RPC, respawn-on-error</li>
+          <li>cleanup_orphans at boot</li>
+        </ul>
+      </div>
+      <div class="component">
+        <div class="component-name">agent/runTask.ts</div>
+        <div class="component-role">Drives Claude Agent SDK's <code>query()</code>. Relays <code>SDKMessage</code> events to renderer as <code>assistant_message</code> / <code>tool_use</code> / <code>tool_result</code>.</div>
+      </div>
+      <div class="component">
+        <div class="component-name">agent/tools.ts</div>
+        <div class="component-role">In-process MCP server defining <code>Bash</code>, <code>Read</code>, <code>Glob</code>. Each handler calls <code>SupervisorClient.run_as_session</code> — every tool call lands in the sandbox.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="edge-label">↕ Two outbound subprocess channels</div>
+
+  <!-- Subprocesses -->
+  <div class="tier tier-subprocess">
+    <div class="tier-label">
+      <span><span class="swatch"></span> &nbsp; Tier 3 — Spawned subprocesses</span>
+      <span class="runtime">child_process.spawn from main</span>
+    </div>
+    <h2>Long-running host children</h2>
+    <div class="components">
+      <div class="component">
+        <div class="component-name">limactl shell <i>agent</i></div>
+        <div class="component-role">Long-lived SSH tunnel to the VM. Hosts the supervisor's stdin/stdout for the entire app session.</div>
+      </div>
+      <div class="component">
+        <div class="component-name">claude  <small>(SDK native binary)</small></div>
+        <div class="component-role">~208 MB per-arch binary shipped via <code>@anthropic-ai/claude-agent-sdk-&lt;triple&gt;</code> (asarUnpack'd). Runs the LLM loop, dispatches tool calls back to main via MCP.</div>
+        <ul class="component-list">
+          <li>Spawned as <code>bun cli.js</code></li>
+          <li>Bun bundled at <code>process.resourcesPath/bun</code></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="edge-label">↓ JSON-RPC over <code>limactl shell</code> stdio (line-delim)</div>
+
+  <!-- VM -->
+  <div class="tier tier-vm">
+    <div class="tier-label">
+      <span><span class="swatch"></span> &nbsp; Tier 4 — Lima VM</span>
+      <span class="runtime">Ubuntu 24.04 · vz vmType · ~/.capybara/lima</span>
+    </div>
+    <h2>Trusted control inside the guest</h2>
+    <div class="components">
+      <div class="component">
+        <div class="component-name">supervisor.py  <small>(root, TCB)</small></div>
+        <div class="component-role">The only process the host talks to in the VM. Manages session users, mounts, sandboxes. <strong>No LLM, no planning, no policy</strong> — just a narrow privileged API.</div>
+        <ul class="component-list">
+          <li>ping / create_session / connect_directory</li>
+          <li>run_as_session / delete_session</li>
+          <li>cleanup_orphans / shutdown</li>
+        </ul>
+      </div>
+      <div class="component">
+        <div class="component-name">/var/lib/capybara/sessions/&lt;sid&gt;/</div>
+        <div class="component-role">Per-session state on disk.</div>
+        <ul class="component-list">
+          <li>home/ → bwrap /home/capybara</li>
+          <li>work/ → bwrap /workspace</li>
+          <li>mounts.json (root:root 0600)</li>
+        </ul>
+      </div>
+      <div class="component">
+        <div class="component-name">capybara_&lt;sid&gt; users</div>
+        <div class="component-role">Per-session unprivileged Linux user. Persistent across launches. Defense-in-depth under bwrap's namespace boundary.</div>
+      </div>
+      <div class="component">
+        <div class="component-name">/host-home  <small>(virtiofs mount)</small></div>
+        <div class="component-role">User's home dir, mounted into the VM. Connected sub-paths get re-bound into per-session sandbox at /mnt/&lt;name&gt;.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="edge-label">↓ <code>sudo -u capybara_&lt;sid&gt; -- bwrap …</code> · per-call sandbox</div>
+
+  <!-- Sandbox -->
+  <div class="tier tier-sandbox">
+    <div class="tier-label">
+      <span><span class="swatch"></span> &nbsp; Tier 5 — bubblewrap sandbox</span>
+      <span class="runtime">Per-call · ephemeral · die-with-parent</span>
+    </div>
+    <h2>Where agent commands actually run</h2>
+    <div class="components">
+      <div class="component boundary">
+        <div class="component-name">bwrap process tree</div>
+        <div class="component-role">--new-session --die-with-parent --unshare-pid · fresh /proc, /dev, /tmp · ro-bind of /usr, /bin, /lib, /etc</div>
+        <ul class="component-list">
+          <li>/workspace ← session work dir</li>
+          <li>/home/capybara ← session home dir</li>
+          <li>/mnt/&lt;name&gt; ← connected host dirs (rw or ro)</li>
+          <li>$HOME=/home/capybara, USER=capybara, TMPDIR=/tmp</li>
+        </ul>
+      </div>
+      <div class="component boundary">
+        <div class="component-name">bash -lc &lt;agent's command&gt;</div>
+        <div class="component-role">The actual command Claude wanted to run. Sees only the sandbox's paths. Cannot reach /host-home or other sessions. Network IS shared with host — agents need DNS / pip / apt.</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="annotations">
+  <div class="note">
+    <h3>Trust boundary</h3>
+    <p>Tier 5 is the security perimeter. The agent's LLM-decided commands cannot escape bwrap's mount + PID namespace. Per-session Linux user is defense-in-depth under that boundary, not the primary gate.</p>
+  </div>
+  <div class="note">
+    <h3>One supervisor channel</h3>
+    <p>Main process owns a single persistent <code>SupervisorClient</code>. Both control-plane calls (create/connect/delete) and agent tool calls (run_as_session) share it. Promise-chain serializes; the supervisor is itself strictly serial.</p>
+  </div>
+  <div class="note">
+    <h3>Tool interception</h3>
+    <p>The SDK ships Bash/Read/Glob as built-in tools that would run on the host. Our in-process MCP server shadows them by name (prefixed <code>mcp__capybara__*</code>); the SDK's <code>allowedTools</code> allow-list keeps only ours, blocking the unsafe defaults.</p>
+  </div>
+  <div class="note">
+    <h3>Three Bun roles</h3>
+    <p>(1) Bun is the dev-tooling runtime: <code>bun install</code>, <code>bun build</code>. (2) Electron's main runs on Node 22, NOT Bun. (3) A bundled Bun binary is shipped to satisfy the SDK's <code>executable: "bun"</code> for the spawned cli.js.</p>
+  </div>
+</div>
+
+<div class="pipe-flow">
+  <h3>Lifecycle of a single agent task</h3>
+  <ol>
+    <li><strong>User types a prompt</strong> in AgentProbe and hits Run.</li>
+    <li><strong>Renderer calls</strong> <code>window.capybara.startAgentTask(prompt)</code>, which crosses contextBridge → preload → <code>ipcRenderer.invoke("start-agent-task", prompt)</code>.</li>
+    <li><strong>Main process</strong> assigns a taskId, attaches an AbortController, calls <code>runAgentTask(prompt, taskId, emit, controller)</code>, returns the taskId.</li>
+    <li><strong>runAgentTask</strong> ensures the session exists (idempotent <code>create_session</code> via SupervisorClient), then calls <code>query()</code> with the MCP server + allowed tools list.</li>
+    <li><strong>SDK spawns the <code>claude</code> binary</strong> as a subprocess (under bundled Bun). Sends prompt + tool defs.</li>
+    <li><strong>Claude emits an <code>assistant</code> message</strong>. If it contains a <code>tool_use</code> block (e.g. Bash), the SDK calls back into main's in-process MCP handler.</li>
+    <li><strong>Tool handler</strong> calls <code>supervisor.request("run_as_session", { command, … })</code> via the persistent SupervisorClient.</li>
+    <li><strong>Supervisor</strong> spawns <code>sudo -u capybara_&lt;sid&gt; -- bwrap … bash -lc &lt;command&gt;</code> inside the VM.</li>
+    <li><strong>Command runs in the sandbox</strong>, exits. supervisor.py collects stdout/stderr/exitCode and returns the JSON-RPC response.</li>
+    <li><strong>Tool result flows back</strong> to the SDK → Claude continues reasoning → repeat until done.</li>
+    <li><strong>Each event</strong> (assistant_message, tool_use, tool_result) hits <code>webContents.send("agent-event", payload)</code> and surfaces in the renderer.</li>
+  </ol>
+</div>
+
+</body>
+</html>
