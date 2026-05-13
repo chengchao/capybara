@@ -3,14 +3,10 @@ import {
   query,
   type Options,
 } from "@anthropic-ai/claude-agent-sdk";
-import { createRequire } from "node:module";
-import { existsSync } from "node:fs";
 import path from "node:path";
 import { app } from "electron";
 import { getSupervisor } from "../vm";
 import { buildTools, SESSION_ID } from "./tools";
-
-const requireFn = createRequire(__filename);
 
 const TOOL_PREFIX = "mcp__capybara__";
 const ALLOWED_TOOLS = ["Bash", "Read", "Glob"].map((name) => TOOL_PREFIX + name);
@@ -52,23 +48,29 @@ function ensureSessionAndMcp() {
   return cachedMcpServer;
 }
 
-// SDK's cli.js lives inside its package; in production builds the package is
-// under `app.asar.unpacked` (asarUnpack), not `app.asar`. Rewrite the path.
-// Per anthropics/claude-agent-sdk-typescript#150.
-function resolveClaudeCli(): string {
-  const cliPath = requireFn.resolve("@anthropic-ai/claude-agent-sdk/cli.js");
-  if (cliPath.includes("app.asar")) {
-    const unpackedPath = cliPath.replace("app.asar", "app.asar.unpacked");
-    if (existsSync(unpackedPath)) return unpackedPath;
-  }
-  return cliPath;
+// SDK ≥0.2.113 spawns a per-arch native `claude` binary from
+// `@anthropic-ai/claude-agent-sdk-<triple>/claude`. In dev the SDK's own
+// auto-resolve finds it in node_modules; in a packaged Electron build,
+// require.resolve lands inside `app.asar` (where the kernel can't exec
+// from), so we override with the asar.unpacked path that `asarUnpack`
+// has materialised on disk.
+function resolveClaudeBinary(): string | undefined {
+  if (!app.isPackaged) return undefined;
+  return path.join(
+    process.resourcesPath,
+    "app.asar.unpacked",
+    "node_modules",
+    "@anthropic-ai",
+    `claude-agent-sdk-${process.platform}-${process.arch}`,
+    "claude",
+  );
 }
 
-// The SDK spawns `bun` / `node` / `deno` (just the executable name) to run
-// cli.js. End users don't have any of those on PATH — Electron's
-// process.execPath is the Electron binary itself, not a JS runtime. We bundle
-// a per-arch Bun binary as an extraResource and prepend its dir to PATH so
-// `executable: "bun"` resolves.
+// The SDK's `executable` option (`bun` / `node` / `deno`) still selects the
+// JS runtime it uses to coordinate the native binary. End users don't have
+// any of those on PATH — Electron's process.execPath is the Electron binary
+// itself, not a JS runtime. We bundle a per-arch Bun binary as an
+// extraResource and prepend its dir to PATH so `executable: "bun"` resolves.
 let pathPrepended = false;
 function ensureBundledBunOnPath(): void {
   if (pathPrepended || !app.isPackaged) return;
@@ -143,12 +145,13 @@ export async function runAgentTask(
 
     const mcp = ensureSessionAndMcp();
     ensureBundledBunOnPath();
+    const claudeBinary = resolveClaudeBinary();
     const options: Options = {
       model: MODEL,
       systemPrompt: SYSTEM_PROMPT,
       mcpServers: { capybara: mcp },
       allowedTools: ALLOWED_TOOLS,
-      pathToClaudeCodeExecutable: resolveClaudeCli(),
+      ...(claudeBinary ? { pathToClaudeCodeExecutable: claudeBinary } : {}),
       executable: app.isPackaged ? "bun" : "node",
       abortController,
     };
