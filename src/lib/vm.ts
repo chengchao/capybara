@@ -1,9 +1,6 @@
-import "./host";
+import type { VmStatus } from "./host";
 
-export type VmStatus =
-  | { kind: "starting" }
-  | { kind: "running" }
-  | { kind: "failed"; reason: string };
+export type { VmStatus };
 
 export function getVmStatus(): Promise<VmStatus> {
   return window.capybara.getVmStatus();
@@ -12,5 +9,5 @@ export function getVmStatus(): Promise<VmStatus> {
 export function subscribeVmStatus(
   cb: (status: VmStatus) => void,
 ): () => void {
-  return window.capybara.onVmStatus((status) => cb(status as VmStatus));
+  return window.capybara.onVmStatus(cb);
 }

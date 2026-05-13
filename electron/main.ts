@@ -118,12 +118,17 @@ if (!gotLock) {
     if (isShuttingDown) return;
     isShuttingDown = true;
     event.preventDefault();
-    for (const controller of activeTasks.values()) controller.abort();
-    await stopSupervisor();
-    await Promise.race([
-      stopVm(),
-      new Promise((resolve) => setTimeout(resolve, 10_000)),
-    ]);
-    app.exit(0);
+    try {
+      for (const controller of activeTasks.values()) controller.abort();
+      await stopSupervisor();
+      await Promise.race([
+        stopVm(),
+        new Promise((resolve) => setTimeout(resolve, 10_000)),
+      ]);
+    } catch (e) {
+      process.stderr.write(`shutdown error: ${(e as Error).message}\n`);
+    } finally {
+      app.exit(0);
+    }
   });
 }

@@ -13,8 +13,7 @@
   "files": [
     "electron/dist/**",
     "dist/**",
-    "package.json",
-    "node_modules/**"
+    "package.json"
   ],
   "extraResources": [
     {

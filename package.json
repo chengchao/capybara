@@ -8,7 +8,7 @@
     "setup:runtimes": "bun run ./scripts/fetch-runtimes.ts",
     "check:electron": "tsc --noEmit -p electron",
     "check:renderer": "tsc --noEmit",
-    "build:electron": "bun build electron/main.ts --target=node --format=cjs --outfile electron/dist/main.cjs && bun build electron/preload.ts --target=node --format=cjs --outfile electron/dist/preload.cjs",
+    "build:electron": "bun build electron/main.ts --target=node --format=cjs --external @anthropic-ai/claude-agent-sdk --outfile electron/dist/main.cjs && bun build electron/preload.ts --target=node --format=cjs --outfile electron/dist/preload.cjs",
     "build:renderer": "tsc && vite build",
     "dev": "vite",
     "preview": "vite preview",

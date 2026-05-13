@@ -40,7 +40,7 @@ jobs:
 
       - name: Install
         # Each runner installs on its native arch so the right SDK platform
-        # package + Bun binary land in node_modules / src-tauri/binaries.
+        # package + Bun binary land in node_modules / binaries.
         run: bun install --frozen-lockfile
 
       - name: Setup runtimes (Bun + Lima)

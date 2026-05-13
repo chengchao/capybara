@@ -1,6 +1,6 @@
 import { tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
-import type { SupervisorClient } from "../vm";
+import { commandResponseTimeoutMs, type SupervisorClient } from "../vm";
 
 export const SESSION_ID = "agent_default";
 const DEFAULT_TIMEOUT_MS = 60_000;
@@ -23,12 +23,17 @@ async function runInSandbox(
   command: string,
   options: { cwd?: string; timeoutMs?: number } = {},
 ): Promise<RunResult> {
-  return (await supervisor.request("run_as_session", {
-    session_id: SESSION_ID,
-    command,
-    cwd: options.cwd ?? DEFAULT_CWD,
-    timeout_ms: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-  })) as RunResult;
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  return (await supervisor.request(
+    "run_as_session",
+    {
+      session_id: SESSION_ID,
+      command,
+      cwd: options.cwd ?? DEFAULT_CWD,
+      timeout_ms: timeoutMs,
+    },
+    commandResponseTimeoutMs(timeoutMs),
+  )) as RunResult;
 }
 
 function asToolResult(result: RunResult, emptyFallback = ""): ToolResult {

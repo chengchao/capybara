@@ -79,7 +79,7 @@ function paths(): LimaPaths {
   return cachedPaths;
 }
 
-function commandResponseTimeoutMs(timeoutMs: number): number {
+export function commandResponseTimeoutMs(timeoutMs: number): number {
   return timeoutMs + SUPERVISOR_COMMAND_RESPONSE_GRACE_MS;
 }
 
@@ -240,6 +240,7 @@ export class SupervisorClient {
   private nextId = 0;
   private chain: Promise<void> = Promise.resolve();
   private linesIter: AsyncGenerator<string> | null = null;
+  private closed = false;
 
   static async start(): Promise<SupervisorClient> {
     const client = new SupervisorClient();
@@ -259,6 +260,7 @@ export class SupervisorClient {
     });
     try {
       await previous;
+      if (this.closed) throw new Error("supervisor client is shut down");
       if (!this.child) this.spawnChild();
       return await this.send(method, params, timeoutMs);
     } finally {
@@ -266,17 +268,31 @@ export class SupervisorClient {
     }
   }
 
+  // Marks the client closed BEFORE entering the chain so a concurrent
+  // request queued during the shutdown rpc sees `closed === true` and
+  // rejects instead of respawning the child we're about to kill.
   async shutdown(): Promise<void> {
-    if (!this.child) return;
+    if (this.closed) return;
+    this.closed = true;
+    const previous = this.chain;
+    let release!: () => void;
+    this.chain = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     try {
-      await this.request("shutdown");
-    } catch {
-      // best-effort
-    }
-    if (this.child) {
-      this.child.kill();
-      this.child = null;
-      this.linesIter = null;
+      await previous;
+      if (this.child) {
+        try {
+          await this.send("shutdown", {}, SUPERVISOR_RESPONSE_TIMEOUT_MS);
+        } catch {
+          // best-effort
+        }
+        if (this.child) (this.child as ChildProcess).kill();
+        this.child = null;
+        this.linesIter = null;
+      }
+    } finally {
+      release();
     }
   }
 
@@ -496,8 +512,6 @@ export async function stopVm(): Promise<void> {
   }
 }
 
-// Re-export request_supervisor analog so IPC handlers in Phase 5 can call
-// methods symmetrically with the agent loop (Phase 3+).
 export async function requestSupervisor<T = unknown>(
   method: string,
   params: unknown = {},
