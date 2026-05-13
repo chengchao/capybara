@@ -1,34 +1,34 @@
-# Tauri + React + Typescript
+# Capybara
 
-This template should help get you started developing with Tauri, React and Typescript in Vite.
-
-## Recommended IDE Setup
-
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+An office-work agent that runs commands inside a sandboxed Lima VM. Built with Electron + React + the [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk-typescript).
 
 ## Setup
 
-The app bundles two runtimes as internal resources: `limactl` (from [Lima](https://lima-vm.io)) for the VM, and `bun` as a Tauri sidecar for the agent. Both are pinned by sha256 in `src-tauri/runtime-manifest.json` and fetched by a single setup step:
+The app bundles three runtimes as internal resources: `limactl` (from [Lima](https://lima-vm.io)) for the VM, `bun` as the JS runtime for the Claude Agent SDK's `claude` binary, and the SDK's per-arch native binary itself. Lima and Bun are pinned by sha256 in `runtime-manifest.json`; the SDK ships via npm's per-platform optional deps.
 
 ```sh
 bun install
-bun run tauri dev   # before*Command hooks call setup:runtimes for you
+bun run setup:runtimes      # fetches Lima + Bun (~100 MB)
+export ANTHROPIC_API_KEY=…
+bun run electron:dev
 ```
 
-Or run the fetcher explicitly:
-
-```sh
-bun run setup:runtimes
-```
-
-`setup:runtimes` reads `src-tauri/runtime-manifest.json`, matches the host's Rust target triple (`rustc --print host-tuple`), downloads the pinned archive, verifies sha256 (refuses install on mismatch), and extracts. It's idempotent — re-runs skip when the binary already exists at the expected path. Currently supports `aarch64-apple-darwin` and `x86_64-apple-darwin`; add a triple to the manifest's `platforms` map to extend.
-
-**Bootstrap requirements:** Bun must be pre-installed on the dev machine (for `setup:runtimes` itself and the Vite/agent build). CI installs Bun in its first step. End users get a fully-bundled `.app` / `.dmg` from CI — they never run `setup:runtimes`.
+`setup:runtimes` reads `runtime-manifest.json`, matches the host's Rust target triple, downloads each archive, verifies sha256 (refuses install on mismatch), and extracts. Idempotent — re-runs skip when the binary already exists at the expected path. Currently supports `aarch64-apple-darwin` and `x86_64-apple-darwin`; add a triple to the manifest's `platforms` map to extend.
 
 **Updating a pinned runtime:** bump `version` and `url` in the manifest, then refresh the `sha256` from the upstream archive (`shasum -a 256 <archive>` on macOS, `sha256sum <archive>` on Linux). Commit the manifest change so the new hash is reviewable.
 
-On startup, the app boots a Lima VM named `agent` under `~/.capybara/lima` (anchored short to stay under macOS's 104-char `UNIX_PATH_MAX` for SSH sockets — Tauri's `app_data_dir` is too long). First run downloads and provisions the cloud image (a few minutes); subsequent warm boots take ~10–15 s. Quitting the app stops the VM (best-effort, 10-second timeout). VM lifecycle progress and failures are printed to stderr — visible in the `tauri dev` terminal or `Console.app` for release builds.
+## Building
 
-The host talks to the VM supervisor over newline-delimited JSON on
-stdin/stdout. See [docs/supervisor-protocol.md](docs/supervisor-protocol.md)
-for the current protocol contract.
+```sh
+bun run dist
+```
+
+Produces a signed `.dmg` (macOS) or `.exe` (Windows) under `release/`. macOS signing/notarization keys come from env vars (`CSC_LINK`, `CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`); absent keys yield an unsigned build that won't pass Gatekeeper.
+
+The build chain: `setup:runtimes` → `check:electron` → `build:electron` → `build:renderer` → `electron-builder`. The `beforePack` hook stages the per-arch Bun binary into `build/bun` for `extraResources`. The `afterPack` hook strips the SDK's `vendor/claude-code-jetbrains-plugin/` jar tree (contains unsigned `.jnilib` files that would fail macOS notarization; see [claude-agent-sdk-typescript#91](https://github.com/anthropics/claude-agent-sdk-typescript/issues/91)).
+
+## Architecture
+
+On startup, the app boots a Lima VM named `agent` under `~/.capybara/lima` (anchored short to stay under macOS's 104-char `UNIX_PATH_MAX` for SSH sockets). First run downloads and provisions the Ubuntu cloud image (a few minutes); subsequent warm boots take ~10–15 s. Quitting the app stops the VM (best-effort, 10-second timeout).
+
+The host talks to an in-VM supervisor over newline-delimited JSON on stdin/stdout. See [docs/supervisor-protocol.md](docs/supervisor-protocol.md) for the protocol contract. The agent loop runs in Electron's main process via the Claude Agent SDK; its Bash/Read/Glob tools are intercepted and routed through `run_as_session` so every command executes inside a bubblewrap sandbox at `/workspace`.

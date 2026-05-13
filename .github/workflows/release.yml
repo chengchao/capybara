@@ -1,0 +1,73 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            arch: arm64
+            label: mac-arm64
+          - os: macos-13
+            arch: x64
+            label: mac-x64
+          # Windows is deferred: Lima doesn't run on Windows; the VM
+          # lifecycle in electron/vm.ts is macOS-only. Re-enable once
+          # the Windows VM strategy lands (WSL2 + bwrap or similar) and
+          # `runtime-manifest.json` gains win32 entries.
+          # - os: windows-latest
+          #   arch: x64
+          #   label: win-x64
+
+    runs-on: ${{ matrix.os }}
+    name: Build (${{ matrix.label }})
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-${{ matrix.arch }}-bun-${{ hashFiles('bun.lock') }}
+
+      - name: Install
+        # Each runner installs on its native arch so the right SDK platform
+        # package + Bun binary land in node_modules / binaries.
+        run: bun install --frozen-lockfile
+
+      - name: Prepare runtimes + bundles
+        run: bun run dist:prepare
+
+      - name: Build
+        # Pass --mac --<arch> so electron-builder only packages this runner's
+        # arch — beforePack stages a single Bun binary for it.
+        run: bun x electron-builder --mac --${{ matrix.arch }}
+        env:
+          # macOS signing + notarization. Populate via repo secrets when
+          # the signing cert is available; absent secrets => unsigned build
+          # (electron-builder skips signing rather than failing).
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: capybara-${{ matrix.label }}
+          path: |
+            release/*.dmg
+            release/latest*.yml
+          if-no-files-found: ignore

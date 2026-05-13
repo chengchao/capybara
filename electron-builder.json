@@ -1,0 +1,42 @@
+{
+  "appId": "com.capybara.capybara-app",
+  "productName": "Capybara",
+  "directories": {
+    "output": "release",
+    "buildResources": "build"
+  },
+  "asar": true,
+  "asarUnpack": [
+    "node_modules/@anthropic-ai/claude-agent-sdk/**",
+    "node_modules/@anthropic-ai/claude-agent-sdk-*/**"
+  ],
+  "files": [
+    "electron/dist/**",
+    "dist/**",
+    "package.json"
+  ],
+  "extraResources": [
+    {
+      "from": "vendor/lima",
+      "to": "vendor/lima"
+    },
+    {
+      "from": "resources/supervisor/capybara_supervisor.py",
+      "to": "resources/supervisor/capybara_supervisor.py"
+    },
+    {
+      "from": "build/bun",
+      "to": "bun"
+    }
+  ],
+  "mac": {
+    "category": "public.app-category.developer-tools",
+    "target": "dmg",
+    "hardenedRuntime": true,
+    "gatekeeperAssess": false,
+    "entitlements": "build/entitlements.mac.plist",
+    "entitlementsInherit": "build/entitlements.mac.plist"
+  },
+  "afterPack": "build/afterPack.cjs",
+  "beforePack": "build/beforePack.cjs"
+}

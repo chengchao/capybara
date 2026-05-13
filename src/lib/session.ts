@@ -1,5 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
-
 export type CreateSessionResult = {
   sessionRoot: string;
   user: string;
@@ -16,7 +14,7 @@ export type DeleteSessionResult = {
 export function createSession(
   sessionId: string,
 ): Promise<CreateSessionResult> {
-  return invoke<CreateSessionResult>("create_session", { sessionId });
+  return window.capybara.createSession(sessionId);
 }
 
 export function connectDirectory(args: {
@@ -26,11 +24,11 @@ export function connectDirectory(args: {
   writable: boolean;
   replace: boolean;
 }): Promise<ConnectDirectoryResult> {
-  return invoke<ConnectDirectoryResult>("connect_directory", args);
+  return window.capybara.connectDirectory(args);
 }
 
 export function deleteSession(
   sessionId: string,
 ): Promise<DeleteSessionResult> {
-  return invoke<DeleteSessionResult>("delete_session", { sessionId });
+  return window.capybara.deleteSession(sessionId);
 }

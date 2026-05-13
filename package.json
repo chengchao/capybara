@@ -3,32 +3,37 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "workspaces": [
-    "agent"
-  ],
+  "main": "electron/dist/main.cjs",
   "scripts": {
-    "setup:runtimes": "bun run ./src-tauri/scripts/fetch-runtimes.ts",
-    "build:agent": "bun run --cwd agent build",
-    "check:agent": "bun run --cwd agent check",
+    "setup:runtimes": "bun run ./scripts/fetch-runtimes.ts",
+    "check:electron": "tsc --noEmit -p electron",
+    "check:renderer": "tsc --noEmit",
+    "build:electron": "bun build electron/main.ts --target=node --format=cjs --external @anthropic-ai/claude-agent-sdk --outfile electron/dist/main.cjs && bun build electron/preload.ts --target=node --format=cjs --outfile electron/dist/preload.cjs",
+    "build:renderer": "tsc && vite build",
     "dev": "vite",
-    "build": "bun run check:agent && bun run build:agent && tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri",
-    "test:supervisor:image": "docker build -f src-tauri/resources/supervisor/Dockerfile.test -t capybara-supervisor-test src-tauri/resources/supervisor",
-    "test:supervisor": "docker run --rm --privileged -v \"$PWD/src-tauri/resources/supervisor:/app:ro\" -w /app capybara-supervisor-test sh -lc 'CAPYBARA_SUPERVISOR_INTEGRATION=1 pytest -q -p no:cacheprovider'"
+    "electron:dev": "concurrently -k -n vite,elec \"bun run dev\" \"wait-on http://localhost:1420 && bun run build:electron && ELECTRON_DEV_URL=http://localhost:1420 electron .\"",
+    "dist:prepare": "bun run setup:runtimes && bun run check:electron && bun run build:electron && bun run build:renderer",
+    "dist": "bun run dist:prepare && electron-builder",
+    "test:supervisor:image": "docker build -f resources/supervisor/Dockerfile.test -t capybara-supervisor-test resources/supervisor",
+    "test:supervisor": "docker run --rm --privileged -v \"$PWD/resources/supervisor:/app:ro\" -w /app capybara-supervisor-test sh -lc 'CAPYBARA_SUPERVISOR_INTEGRATION=1 pytest -q -p no:cacheprovider'"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.11.0",
-    "@tauri-apps/plugin-opener": "^2.5.3",
+    "@anthropic-ai/claude-agent-sdk": "^0.2.139",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/node": "^25.7.0",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "concurrently": "^9.2.1",
+    "electron": "^42.0.1",
+    "electron-builder": "^26.8.1",
     "typescript": "~5.8.3",
     "vite": "^7.0.4",
-    "@tauri-apps/cli": "^2.11.0"
+    "wait-on": "^9.0.10"
   }
 }

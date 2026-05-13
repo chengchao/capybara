@@ -1,19 +1,13 @@
-import { invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import type { VmStatus } from "./host";
 
-const VM_STATUS_EVENT = "vm-status";
-
-export type VmStatus =
-  | { kind: "starting" }
-  | { kind: "running" }
-  | { kind: "failed"; reason: string };
+export type { VmStatus };
 
 export function getVmStatus(): Promise<VmStatus> {
-  return invoke<VmStatus>("get_vm_status");
+  return window.capybara.getVmStatus();
 }
 
 export function subscribeVmStatus(
   cb: (status: VmStatus) => void,
-): Promise<UnlistenFn> {
-  return listen<VmStatus>(VM_STATUS_EVENT, (e) => cb(e.payload));
+): () => void {
+  return window.capybara.onVmStatus(cb);
 }
