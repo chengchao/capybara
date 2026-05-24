@@ -17,15 +17,7 @@ function spawnSupervisorProcess() {
   const limaHome = requireEnv("LIMA_HOME");
   const instance = requireEnv("CAPYBARA_LIMA_INSTANCE");
   return Bun.spawn(
-    [
-      limactl,
-      "shell",
-      instance,
-      "--",
-      "sudo",
-      "python3",
-      "/opt/capybara/supervisor.py",
-    ],
+    [limactl, "shell", instance, "--", "sudo", "python3", "/opt/capybara/supervisor.py"],
     {
       stdin: "pipe",
       stdout: "pipe",
@@ -116,9 +108,7 @@ function requireEnv(key: string): string {
   return value;
 }
 
-async function* lineIterator(
-  stream: ReadableStream<Uint8Array>,
-): AsyncGenerator<string> {
+async function* lineIterator(stream: ReadableStream<Uint8Array>): AsyncGenerator<string> {
   const decoder = new TextDecoder();
   let buffer = "";
   for await (const chunk of stream) {

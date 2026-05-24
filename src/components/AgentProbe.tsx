@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+
 import { startAgentTask, subscribeAgentEvents } from "../lib/agent";
 
 export default function AgentProbe() {
@@ -12,10 +13,7 @@ export default function AgentProbe() {
     // unsubscribe runs as soon as it resolves, even if cleanup beat the
     // subscription handshake.
     const subscription = subscribeAgentEvents((event) => {
-      setEvents((prev) => [
-        JSON.stringify(event, null, 2),
-        ...prev,
-      ].slice(0, 20));
+      setEvents((prev) => [JSON.stringify(event, null, 2), ...prev].slice(0, 20));
     });
     return () => {
       subscription.then((unlisten) => unlisten());

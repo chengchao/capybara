@@ -24,9 +24,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "externalBin": [
-      "binaries/bun"
-    ],
+    "externalBin": ["binaries/bun"],
     "resources": [
       "vendor/lima/bin/**/*",
       "vendor/lima/share/lima/**/*",

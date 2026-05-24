@@ -17,13 +17,13 @@ Stdout is reserved for protocol responses. Logs must go to stderr.
 Success:
 
 ```json
-{"id":"1","result":{}}
+{ "id": "1", "result": {} }
 ```
 
 Failure:
 
 ```json
-{"id":"1","error":{"message":"invalid session_id"}}
+{ "id": "1", "error": { "message": "invalid session_id" } }
 ```
 
 The response `id` must match the request `id`. Requests are handled
@@ -36,13 +36,13 @@ sequentially by one supervisor process.
 Request:
 
 ```json
-{"id":"1","method":"ping","params":{}}
+{ "id": "1", "method": "ping", "params": {} }
 ```
 
 Response:
 
 ```json
-{"id":"1","result":{"ok":true}}
+{ "id": "1", "result": { "ok": true } }
 ```
 
 ### create_session
@@ -53,7 +53,7 @@ operation is idempotent for the same `session_id`.
 Request:
 
 ```json
-{"id":"1","method":"create_session","params":{"session_id":"downloadsprobe"}}
+{ "id": "1", "method": "create_session", "params": { "session_id": "downloadsprobe" } }
 ```
 
 Response:
@@ -99,7 +99,7 @@ Request:
 Response:
 
 ```json
-{"id":"1","result":{"guestPath":"/mnt/Downloads"}}
+{ "id": "1", "result": { "guestPath": "/mnt/Downloads" } }
 ```
 
 `host_path` must resolve under `/host-home` and must be an existing directory.
@@ -162,13 +162,13 @@ deletes the session state directory.
 Request:
 
 ```json
-{"id":"1","method":"delete_session","params":{"session_id":"downloadsprobe"}}
+{ "id": "1", "method": "delete_session", "params": { "session_id": "downloadsprobe" } }
 ```
 
 Response:
 
 ```json
-{"id":"1","result":{"ok":true}}
+{ "id": "1", "result": { "ok": true } }
 ```
 
 ### shutdown
@@ -178,13 +178,13 @@ Asks the supervisor process to exit after returning the response.
 Request:
 
 ```json
-{"id":"1","method":"shutdown","params":{}}
+{ "id": "1", "method": "shutdown", "params": {} }
 ```
 
 Response:
 
 ```json
-{"id":"1","result":{"ok":true,"shutdown":true}}
+{ "id": "1", "result": { "ok": true, "shutdown": true } }
 ```
 
 ### cleanup_orphans
@@ -202,13 +202,13 @@ would trash that supervisor's in-flight bwrap child.
 Request:
 
 ```json
-{"id":"1","method":"cleanup_orphans","params":{}}
+{ "id": "1", "method": "cleanup_orphans", "params": {} }
 ```
 
 Response:
 
 ```json
-{"id":"1","result":{"ok":true}}
+{ "id": "1", "result": { "ok": true } }
 ```
 
 ## Sandbox Contract
