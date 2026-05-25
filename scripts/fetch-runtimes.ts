@@ -116,7 +116,7 @@ async function extract(
 
 // Maps Node's process.{platform,arch} to a Rust host-tuple-shaped triple.
 // Keeping the Rust-style triple in the manifest keeps it portable to other
-// tools that already speak that format (rustc, Tauri's externalBin, etc.).
+// tools that already speak that format (rustc, cargo, etc.).
 const RUST_ARCH: Record<string, string> = {
   arm64: "aarch64",
   x64: "x86_64",

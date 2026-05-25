@@ -1,18 +1,6 @@
 declare global {
   interface Window {
     capybara: {
-      createSession: (sessionId: string) => Promise<{
-        sessionRoot: string;
-        user: string;
-      }>;
-      connectDirectory: (args: {
-        sessionId: string;
-        hostPath: string;
-        mountName: string;
-        writable: boolean;
-        replace: boolean;
-      }) => Promise<{ guestPath: string }>;
-      deleteSession: (sessionId: string) => Promise<{ ok: boolean }>;
       getVmStatus: () => Promise<VmStatus>;
       startAgentTask: (prompt: string) => Promise<{ taskId: string }>;
       onVmStatus: (callback: (status: VmStatus) => void) => () => void;
@@ -44,5 +32,3 @@ export type AgentEvent =
       isError: boolean;
     }
   | { event: "task_finished"; taskId: string };
-
-export {};

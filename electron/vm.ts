@@ -511,12 +511,3 @@ export async function stopVm(): Promise<void> {
     process.stderr.write(`vm: stop failed: ${(e as Error).message}\n`);
   }
 }
-
-export async function requestSupervisor<T = unknown>(
-  method: string,
-  params: unknown = {},
-  timeoutMs?: number,
-): Promise<T> {
-  const client = getSupervisor();
-  return (await client.request(method, params, timeoutMs)) as T;
-}
