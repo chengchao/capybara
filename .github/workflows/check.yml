@@ -27,4 +27,8 @@ jobs:
         with:
           bun-version: latest
       - run: bun run test:supervisor:image
-      - run: bun run test:supervisor
+      # Integration tests need a working bwrap sandbox, which the GitHub
+      # runner can't provide (nested privileged container); they self-skip
+      # without CAPYBARA_SUPERVISOR_INTEGRATION. CI runs the unit tests only;
+      # run `bun run test:supervisor` locally for the full integration suite.
+      - run: bun run test:supervisor:ci

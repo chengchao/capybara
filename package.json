@@ -19,7 +19,8 @@
     "dist:prepare": "bun run setup:runtimes && bun run check:electron && bun run build:electron && bun run build:renderer",
     "dist": "bun run dist:prepare && electron-builder",
     "test:supervisor:image": "docker build -f resources/supervisor/Dockerfile.test -t capybara-supervisor-test resources/supervisor",
-    "test:supervisor": "docker run --rm --privileged -v \"$PWD/resources/supervisor:/app:ro\" -w /app capybara-supervisor-test sh -lc 'CAPYBARA_SUPERVISOR_INTEGRATION=1 pytest -q -p no:cacheprovider'"
+    "test:supervisor": "docker run --rm --privileged -v \"$PWD/resources/supervisor:/app:ro\" -w /app capybara-supervisor-test sh -lc 'CAPYBARA_SUPERVISOR_INTEGRATION=1 pytest -q -p no:cacheprovider'",
+    "test:supervisor:ci": "docker run --rm -v \"$PWD/resources/supervisor:/app:ro\" -w /app capybara-supervisor-test sh -lc 'pytest -q -p no:cacheprovider'"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.139",
