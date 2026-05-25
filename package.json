@@ -1,11 +1,11 @@
 {
   "name": "capybara",
-  "private": true,
   "version": "0.1.0",
-  "type": "module",
+  "private": true,
   "workspaces": [
     "agent"
   ],
+  "type": "module",
   "scripts": {
     "setup:runtimes": "bun run ./src-tauri/scripts/fetch-runtimes.ts",
     "build:agent": "bun run --cwd agent build",
@@ -13,6 +13,9 @@
     "dev": "vite",
     "build": "bun run check:agent && bun run build:agent && tsc && vite build",
     "preview": "vite preview",
+    "lint": "oxlint -D correctness",
+    "fmt": "oxfmt",
+    "fmt:check": "oxfmt --check",
     "tauri": "tauri",
     "test:supervisor:image": "docker build -f src-tauri/resources/supervisor/Dockerfile.test -t capybara-supervisor-test src-tauri/resources/supervisor",
     "test:supervisor": "docker run --rm --privileged -v \"$PWD/src-tauri/resources/supervisor:/app:ro\" -w /app capybara-supervisor-test sh -lc 'CAPYBARA_SUPERVISOR_INTEGRATION=1 pytest -q -p no:cacheprovider'"
@@ -24,11 +27,13 @@
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.11.0",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "oxfmt": "^0.51.0",
+    "oxlint": "^1.66.0",
     "typescript": "~5.8.3",
-    "vite": "^7.0.4",
-    "@tauri-apps/cli": "^2.11.0"
+    "vite": "^7.0.4"
   }
 }

@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { type UnlistenFn, listen } from "@tauri-apps/api/event";
 
 const VM_STATUS_EVENT = "vm-status";
 
@@ -12,8 +12,6 @@ export function getVmStatus(): Promise<VmStatus> {
   return invoke<VmStatus>("get_vm_status");
 }
 
-export function subscribeVmStatus(
-  cb: (status: VmStatus) => void,
-): Promise<UnlistenFn> {
+export function subscribeVmStatus(cb: (status: VmStatus) => void): Promise<UnlistenFn> {
   return listen<VmStatus>(VM_STATUS_EVENT, (e) => cb(e.payload));
 }

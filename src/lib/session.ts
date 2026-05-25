@@ -13,9 +13,7 @@ export type DeleteSessionResult = {
   ok: boolean;
 };
 
-export function createSession(
-  sessionId: string,
-): Promise<CreateSessionResult> {
+export function createSession(sessionId: string): Promise<CreateSessionResult> {
   return invoke<CreateSessionResult>("create_session", { sessionId });
 }
 
@@ -29,8 +27,6 @@ export function connectDirectory(args: {
   return invoke<ConnectDirectoryResult>("connect_directory", args);
 }
 
-export function deleteSession(
-  sessionId: string,
-): Promise<DeleteSessionResult> {
+export function deleteSession(sessionId: string): Promise<DeleteSessionResult> {
   return invoke<DeleteSessionResult>("delete_session", { sessionId });
 }

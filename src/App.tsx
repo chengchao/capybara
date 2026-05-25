@@ -1,8 +1,10 @@
 import { useState } from "react";
+
 import reactLogo from "./assets/react.svg";
-import { greet } from "./lib/tauri";
-import VmStatusPill from "./components/VmStatusPill";
 import AgentProbe from "./components/AgentProbe";
+import VmStatusPill from "./components/VmStatusPill";
+import { greet } from "./lib/tauri";
+
 import "./App.css";
 
 function App() {

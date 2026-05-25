@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
 import type { UnlistenFn } from "@tauri-apps/api/event";
-import { getVmStatus, subscribeVmStatus, type VmStatus } from "../lib/vm";
+import { useEffect, useState } from "react";
+
+import { type VmStatus, getVmStatus, subscribeVmStatus } from "../lib/vm";
 
 export default function VmStatusPill() {
   const [status, setStatus] = useState<VmStatus>({ kind: "starting" });
