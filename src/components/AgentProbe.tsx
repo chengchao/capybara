@@ -7,9 +7,12 @@ export default function AgentProbe() {
   const [busy, setBusy] = useState(false);
   const [events, setEvents] = useState<string[]>([]);
   const [error, setError] = useState("");
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [resume, setResume] = useState(true);
 
   useEffect(() => {
     const unsubscribe = subscribeAgentEvents((event) => {
+      if (event.event === "session_started") setSessionId(event.sessionId);
       setEvents((prev) => [JSON.stringify(event, null, 2), ...prev].slice(0, 20));
     });
     return unsubscribe;
@@ -19,13 +22,21 @@ export default function AgentProbe() {
     setBusy(true);
     setError("");
     try {
-      await startAgentTask(prompt);
+      await startAgentTask({
+        prompt,
+        resumeSessionId: resume && sessionId ? sessionId : undefined,
+      });
       setEvents((prev) => ["sent start_task request", ...prev]);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
+  }
+
+  function newConversation() {
+    setSessionId(null);
+    setEvents([]);
   }
 
   return (
@@ -39,6 +50,20 @@ export default function AgentProbe() {
         <button type="button" onClick={runAgent} disabled={busy}>
           Run Agent
         </button>
+      </div>
+      <div className="agent-probe__row">
+        <label>
+          <input
+            type="checkbox"
+            checked={resume}
+            onChange={(e) => setResume(e.currentTarget.checked)}
+          />
+          Continue conversation
+        </label>
+        <button type="button" onClick={newConversation} disabled={busy || !sessionId}>
+          New conversation
+        </button>
+        <span>{sessionId ? `session ${sessionId.slice(0, 8)}…` : "no session yet"}</span>
       </div>
       <pre className="agent-probe__events">
         {events.length ? events.join("\n\n") : "(no agent events yet)"}
