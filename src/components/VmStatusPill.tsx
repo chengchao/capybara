@@ -1,7 +1,6 @@
-import type { UnlistenFn } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
 
-import { type VmStatus, getVmStatus, subscribeVmStatus } from "../lib/vm";
+import { getVmStatus, subscribeVmStatus, type VmStatus } from "../lib/vm";
 
 export default function VmStatusPill() {
   const [status, setStatus] = useState<VmStatus>({ kind: "starting" });
@@ -9,23 +8,18 @@ export default function VmStatusPill() {
   useEffect(() => {
     let cancelled = false;
     let receivedEvent = false;
-    let unlisten: UnlistenFn | undefined;
-
-    async function setup() {
-      unlisten = await subscribeVmStatus((next) => {
-        if (cancelled) return;
-        receivedEvent = true;
-        setStatus(next);
-      });
-      const current = await getVmStatus();
+    const unlisten = subscribeVmStatus((next) => {
+      if (cancelled) return;
+      receivedEvent = true;
+      setStatus(next);
+    });
+    getVmStatus().then((current) => {
       if (cancelled || receivedEvent) return;
       setStatus(current);
-    }
-
-    setup();
+    });
     return () => {
       cancelled = true;
-      unlisten?.();
+      unlisten();
     };
   }, []);
 
