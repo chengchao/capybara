@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Capybara — per-turn flow (Electron)</title>
+    <style>
+      :root {
+        --bg: #0f1115;
+        --panel: #161922;
+        --panel-2: #1c2030;
+        --border: #262b3a;
+        --text: #e6e8ee;
+        --muted: #9aa1b2;
+        --accent-host: #8fb6ff;    /* Electron main — host / control plane */
+        --accent-agent: #7cd6a8;   /* per-turn agent loop (SDK query + claude) */
+        --accent-vm: #e8b478;      /* Lima VM + supervisor */
+        --accent-ui: #d792e6;      /* React renderer */
+        --accent-shared: #c9b46b;
+        --good: #7cd6a8;
+        --warn: #e8c987;
+        --bad: #e88a8a;
+        --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--sans);
+        font-size: 15px;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .wrap { max-width: 1120px; margin: 0 auto; padding: 56px 24px 96px; }
+
+      header { margin-bottom: 40px; }
+
+      .eyebrow {
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 14px;
+      }
+
+      h1 { font-size: 38px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -0.02em; }
+
+      .lede { color: var(--muted); max-width: 74ch; margin: 0; }
+      .lede strong { color: var(--text); font-weight: 600; }
+
+      h2 {
+        font-size: 13px;
+        font-family: var(--mono);
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 56px 0 16px;
+      }
+
+      h3 { margin: 0 0 6px; font-size: 19px; letter-spacing: -0.01em; }
+
+      .pill {
+        display: inline-block;
+        padding: 2px 9px;
+        border-radius: 999px;
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        font-weight: 600;
+        vertical-align: middle;
+        margin-left: 8px;
+      }
+      .pill.ui    { background: rgba(215,146,230,.14); color: var(--accent-ui); }
+      .pill.host  { background: rgba(143,182,255,.14); color: var(--accent-host); }
+      .pill.agent { background: rgba(124,214,168,.14); color: var(--accent-agent); }
+      .pill.vm    { background: rgba(232,180,120,.14); color: var(--accent-vm); }
+
+      code, .mono { font-family: var(--mono); font-size: 0.92em; }
+      p code, li code, td code, .invariants code, .panel code {
+        background: var(--panel-2);
+        padding: 1px 6px;
+        border-radius: 4px;
+        font-size: 0.88em;
+      }
+
+      .invariants {
+        margin-top: 28px;
+        padding: 16px 18px;
+        border: 1px solid var(--border);
+        background: var(--panel);
+        border-radius: 10px;
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 10px 18px;
+        align-items: start;
+      }
+      .invariants .label {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--accent-shared);
+        padding-top: 3px;
+      }
+      .invariants .val { margin: 0; }
+      .invariants .val strong { color: var(--text); }
+
+      .actors { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+      .actor {
+        border: 1px solid var(--border);
+        background: var(--panel);
+        border-radius: 12px;
+        padding: 18px 18px 16px;
+        display: flex;
+        flex-direction: column;
+      }
+      .actor.ui    { border-top: 2px solid var(--accent-ui); }
+      .actor.host  { border-top: 2px solid var(--accent-host); }
+      .actor.agent { border-top: 2px solid var(--accent-agent); }
+      .actor.vm    { border-top: 2px solid var(--accent-vm); }
+      .actor .who {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 8px;
+      }
+      .actor h3 { font-size: 17px; margin: 0 0 8px; }
+      .actor p { margin: 0 0 8px; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+      .actor .life {
+        margin-top: auto;
+        padding-top: 10px;
+        border-top: 1px dashed var(--border);
+        font-family: var(--mono);
+        font-size: 11.5px;
+        color: var(--text);
+      }
+      .actor .life span { color: var(--muted); }
+
+      .diagram-wrap {
+        border: 1px solid var(--border);
+        background: var(--panel);
+        border-radius: 12px;
+        padding: 22px 22px 16px;
+      }
+      .diagram-wrap p.cap { margin: 0 0 12px; color: var(--muted); font-size: 13.5px; }
+      pre.diagram {
+        margin: 0;
+        font-family: var(--mono);
+        font-size: 12.5px;
+        line-height: 1.55;
+        overflow-x: auto;
+        color: var(--text);
+      }
+      pre.diagram .ui    { color: var(--accent-ui);    }
+      pre.diagram .host  { color: var(--accent-host);  }
+      pre.diagram .agent { color: var(--accent-agent); }
+      pre.diagram .vm    { color: var(--accent-vm);    }
+      pre.diagram .arrow { color: var(--muted);        }
+      pre.diagram .lab   { color: var(--muted);        }
+
+      .legend {
+        margin-top: 14px;
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .legend .swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+
+      .turn { border: 1px solid var(--border); background: var(--panel); border-radius: 12px; padding: 4px 0; }
+      .turn ol { margin: 0; padding: 8px 28px 8px 56px; list-style: decimal; }
+      .turn ol li { padding: 12px 0; border-top: 1px dashed var(--border); }
+      .turn ol li:first-child { border-top: 0; }
+      .turn ol li b { font-weight: 600; }
+      .turn ol li .row { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+      .turn ol li .desc { color: var(--muted); font-size: 13.5px; margin-top: 4px; }
+      .turn ol li .desc code { background: var(--panel-2); padding: 1px 6px; border-radius: 4px; font-size: 0.86em; }
+
+      .life2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+      .life2 .col { border: 1px solid var(--border); background: var(--panel); border-radius: 12px; padding: 18px 20px; }
+      .life2 h3 { font-size: 13px; font-family: var(--mono); letter-spacing: 0.12em; text-transform: uppercase; margin: 0 0 4px; }
+      .life2 .sub { color: var(--muted); font-size: 12.5px; margin: 0 0 12px; }
+      .life2 .perturn h3 { color: var(--accent-agent); }
+      .life2 .persistent h3 { color: var(--accent-host); }
+      .life2 ul { margin: 0; padding-left: 18px; }
+      .life2 li { padding: 5px 0; font-size: 13.5px; color: var(--text); }
+      .life2 li span { color: var(--muted); }
+
+      .note {
+        margin-top: 18px;
+        padding: 14px 18px;
+        border: 1px solid var(--border);
+        border-left: 2px solid var(--accent-vm);
+        background: var(--panel);
+        border-radius: 8px;
+        color: var(--muted);
+        font-size: 13.5px;
+      }
+      .note strong { color: var(--text); }
+      .note a { color: var(--accent-host); text-decoration: none; }
+      .note a:hover { text-decoration: underline; }
+
+      footer {
+        margin-top: 64px;
+        padding-top: 22px;
+        border-top: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 13px;
+      }
+      footer a { color: var(--accent-host); text-decoration: none; }
+      footer a:hover { text-decoration: underline; }
+
+      @media (max-width: 900px) {
+        .actors { grid-template-columns: 1fr 1fr; }
+        .life2 { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div class="eyebrow">Capybara · per-turn flow · current (Electron)</div>
+        <h1>A turn, end to end</h1>
+        <p class="lede">
+          Capybara's agent is a <strong>one-shot invocation per turn</strong>, not a long-running
+          agent process. Each prompt runs the Claude Agent SDK's <code>query()</code> exactly once,
+          <strong>in-process inside the long-lived Electron main process</strong>, spawning a fresh
+          <code>claude</code> subprocess that runs to completion and exits. It talks to a persistent
+          VM over a persistent supervisor channel — but the agent loop itself is born and dies with
+          the turn.
+        </p>
+
+        <div class="invariants">
+          <div class="label">Agent</div>
+          <p class="val"><strong>One <code>query()</code> per turn.</strong> <code>runAgentTask</code> runs once → streams messages → emits <code>task_finished</code> → returns. No loop awaiting the next prompt.</p>
+          <div class="label">Where</div>
+          <p class="val"><strong>In-process in Electron main.</strong> No separate agent process or sidecar — the SDK runs in the host; only the native <code>claude</code> binary is a subprocess (one per turn).</p>
+          <div class="label">Persists</div>
+          <p class="val">The Electron main process, the <code>SupervisorClient</code> (VM channel), the cached MCP server, the Lima VM, and the <code>/workspace</code> sandbox state — all survive across turns.</p>
+          <div class="label">Memory</div>
+          <p class="val"><strong>No cross-turn conversation memory.</strong> <code>query()</code> is called without <code>resume</code>, so each turn is a fresh conversation; only the VM filesystem carries forward (see issue #20).</p>
+        </div>
+      </header>
+
+      <h2>Actors</h2>
+      <div class="actors">
+        <div class="actor ui">
+          <div class="who">React webview</div>
+          <h3>Renderer</h3>
+          <p>Sends prompts and renders streamed events via the <code>window.capybara</code> contextBridge API. No Node access.</p>
+          <div class="life">persistent <span>· the UI</span></div>
+        </div>
+        <div class="actor host">
+          <div class="who">Electron main · Node</div>
+          <h3>Host</h3>
+          <p>Holds <code>ANTHROPIC_API_KEY</code>. Handles IPC, runs the agent in-process, owns the supervisor channel, bridges events to the UI.</p>
+          <div class="life">persistent <span>· the app</span></div>
+        </div>
+        <div class="actor agent">
+          <div class="who">Claude Agent SDK</div>
+          <h3>Agent loop</h3>
+          <p>One <code>query()</code> per turn + the <code>claude</code> subprocess it spawns. Reasons, calls tools, streams messages.</p>
+          <div class="life">per turn <span>· born &amp; dies</span></div>
+        </div>
+        <div class="actor vm">
+          <div class="who">Lima · Python</div>
+          <h3>Supervisor + VM</h3>
+          <p>Runs the agent's <code>Bash</code>/<code>Read</code>/<code>Glob</code> under <code>bwrap</code> as a per-session user in <code>/workspace</code>.</p>
+          <div class="life">persistent <span>· data plane</span></div>
+        </div>
+      </div>
+
+      <h2>The shape</h2>
+      <div class="diagram-wrap">
+        <p class="cap">One long-running Electron app + one long-running VM. The agent loop (green) is the only thing born and torn down each turn; the supervisor channel into the VM is held open across turns.</p>
+        <pre class="diagram">
+<span class="lab">                              user prompt</span>
+<span class="arrow">                                   │</span>
+<span class="arrow">                                   ▼</span>
+<span class="host">  ┌─ Electron app · HOST · long-running · holds ANTHROPIC_API_KEY ──┐</span>
+<span class="host">  │</span>   <span class="ui">React renderer</span> <span class="arrow">◄─</span> <span class="lab">contextBridge IPC</span> <span class="arrow">─►</span> <span class="host">main (broker/bridge)</span> <span class="host">│</span>
+<span class="host">  │</span>                          <span class="lab">window.capybara</span>          <span class="arrow">│</span>          <span class="host">│</span>
+<span class="host">  │</span>   <span class="lab">── per turn: one start-agent-task ────────────────▼─────────</span>   <span class="host">│</span>
+<span class="host">  │</span>   <span class="agent">agent loop = query() once</span> <span class="arrow">──►</span> <span class="agent">claude subprocess</span> <span class="arrow">──►</span> <span class="lab">LLM</span>    <span class="host">│</span>
+<span class="host">  │</span>   <span class="lab">(born at start-agent-task · dies at task_finished)</span>           <span class="host">│</span>
+<span class="host">  │</span>                       <span class="arrow">│</span> <span class="lab">Bash / Read / Glob  (MCP tools)</span>          <span class="host">│</span>
+<span class="host">  └───────────────────────┼─────────────────────────────────────────┘</span>
+<span class="arrow">                          │</span> <span class="lab">run_as_session  ·  persistent SupervisorClient</span>
+<span class="arrow">                          ▼</span>
+<span class="vm">  ┌─ Lima VM · DATA PLANE · long-running ──────────────────────────┐</span>
+<span class="vm">  │</span>   supervisor <span class="arrow">──►</span> <span class="vm">bwrap · per-session user</span> <span class="arrow">──►</span> <span class="vm">/workspace</span>        <span class="vm">│</span>
+<span class="vm">  └────────────────────────────────────────────────────────────────┘</span>
+
+<span class="lab">  LLM = api.anthropic.com (the SDK's claude subprocess calls it directly)</span>
+</pre>
+        <div class="legend">
+          <span><span class="swatch" style="background:var(--accent-ui)"></span>renderer</span>
+          <span><span class="swatch" style="background:var(--accent-host)"></span>Electron main / host</span>
+          <span><span class="swatch" style="background:var(--accent-agent)"></span>per-turn agent loop</span>
+          <span><span class="swatch" style="background:var(--accent-vm)"></span>VM + supervisor</span>
+        </div>
+      </div>
+
+      <h2>A turn, step by step</h2>
+      <div class="turn">
+        <ol>
+          <li>
+            <div class="row"><b>UI starts a task</b> <span class="pill ui">ui</span><span class="pill host">host</span></div>
+            <div class="desc">The renderer calls <code>window.capybara.startAgentTask(prompt)</code> → IPC <code>start-agent-task</code> in <code>electron/main.ts</code>.</div>
+          </li>
+          <li>
+            <div class="row"><b>Host accepts the turn</b> <span class="pill host">host</span></div>
+            <div class="desc">Main mints a <code>taskId</code> (<code>randomUUID</code>) and an <code>AbortController</code>, tracks it in <code>activeTasks</code>, calls <code>runAgentTask(prompt, taskId, emit, controller)</code>, and returns <code>{ taskId }</code>.</div>
+          </li>
+          <li>
+            <div class="row"><b>Ensure the sandbox session</b> <span class="pill host">host</span><span class="pill vm">vm</span></div>
+            <div class="desc">Emits <code>task_started</code>, then <code>supervisor.request("create_session", { session_id: "agent_default" })</code> over the persistent channel — idempotent; prepares the VM <code>/workspace</code>.</div>
+          </li>
+          <li>
+            <div class="row"><b>Run the one query</b> <span class="pill host">host</span><span class="pill agent">agent</span></div>
+            <div class="desc">Builds <code>options</code> (model, system prompt, the <code>capybara</code> MCP server exposing <code>Bash</code>/<code>Read</code>/<code>Glob</code>, <code>allowedTools</code>, <code>abortController</code>) and calls <code>query({ prompt, options })</code> — <strong>once</strong> for the turn.</div>
+          </li>
+          <li>
+            <div class="row"><b>The model reasons</b> <span class="pill agent">agent</span></div>
+            <div class="desc">The SDK spawns the native <code>claude</code> subprocess (per query), which talks to <code>api.anthropic.com</code> and decides tool calls.</div>
+          </li>
+          <li>
+            <div class="row"><b>Tool calls broker into the VM</b> <span class="pill agent">agent</span><span class="pill vm">vm</span></div>
+            <div class="desc">Each <code>Bash</code>/<code>Read</code>/<code>Glob</code> MCP handler calls <code>supervisor.request("run_as_session", { session_id, command, cwd, timeout_ms })</code>; the VM runs it under <code>bwrap</code> as the per-session user in <code>/workspace</code> and returns the result to the model.</div>
+          </li>
+          <li>
+            <div class="row"><b>Messages stream to the UI</b> <span class="pill agent">agent</span><span class="pill host">host</span><span class="pill ui">ui</span></div>
+            <div class="desc"><code>relay()</code> maps SDK messages to <code>agent-event</code> IPC: assistant text → <code>assistant_message</code>, <code>tool_use</code> → <code>tool_use</code>, tool results → <code>tool_result</code>. The renderer renders them via <code>onAgentEvent</code>.</div>
+          </li>
+          <li>
+            <div class="row"><b>The turn ends</b> <span class="pill agent">agent</span><span class="pill host">host</span></div>
+            <div class="desc">The <code>query()</code> stream completes → <code>task_finished</code> emitted → <code>runAgentTask</code> returns → <code>activeTasks.delete(taskId)</code>. The <code>claude</code> subprocess exits; nothing of the agent loop persists.</div>
+          </li>
+        </ol>
+      </div>
+
+      <h2>What lives one turn vs. forever</h2>
+      <div class="life2">
+        <div class="col perturn">
+          <h3>Per turn — born &amp; dies</h3>
+          <p class="sub">Created on <code>start-agent-task</code>, gone at <code>task_finished</code>.</p>
+          <ul>
+            <li>the <code>runAgentTask</code> invocation <span>+ its <code>taskId</code> / <code>AbortController</code></span></li>
+            <li>the SDK <code>query()</code> <span>— one per turn</span></li>
+            <li>the native <code>claude</code> subprocess <span>— spawned by that query</span></li>
+          </ul>
+        </div>
+        <div class="col persistent">
+          <h3>Persistent — survives turns</h3>
+          <p class="sub">Spun up once; reused by every turn.</p>
+          <ul>
+            <li>the Electron main process <span>— the app</span></li>
+            <li>the <code>SupervisorClient</code> <span>— module singleton, the VM channel</span></li>
+            <li>the cached MCP server <span>(<code>cachedMcpServer</code>)</span></li>
+            <li>the Lima VM + supervisor <span>+ <code>/workspace</code> &amp; the <code>agent_default</code> session</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="note">
+        <strong>No conversation memory across turns.</strong> <code>query()</code> is called without <code>resume</code> or an SDK <code>session_id</code>, so each turn starts a fresh conversation with the same system prompt — only the VM <code>/workspace</code> filesystem carries state forward. <code>SESSION_ID = "agent_default"</code> is the <em>VM sandbox</em> session, not the SDK conversation. Threading the SDK <code>session_id</code> + <code>resume</code> to give real cross-turn memory is tracked in <a href="https://github.com/chengchao/capybara/issues/20">issue #20</a>. For where the agent runs relative to the trust boundary, see <a href="agent-in-vm.html">agent-in-vm.html</a>.
+      </div>
+
+      <footer>
+        Reflects the merged Electron architecture (<code>electron/main.ts</code>, <code>electron/agent/runTask.ts</code>, <code>electron/agent/tools.ts</code>, <code>electron/vm.ts</code>). See also <a href="index.html">the docs index</a>.
+      </footer>
+    </div>
+  </body>
+</html>

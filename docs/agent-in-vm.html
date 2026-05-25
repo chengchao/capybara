@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Capybara — agent-in-VM architecture</title>
+    <style>
+      :root {
+        --bg: #0f1115;
+        --panel: #161922;
+        --panel-2: #1c2030;
+        --border: #262b3a;
+        --text: #e6e8ee;
+        --muted: #9aa1b2;
+        --accent-host: #8fb6ff;    /* Electron main (Node) host — control plane */
+        --accent-agent: #7cd6a8;   /* agent runtime (now inside the VM) */
+        --accent-vm: #e8b478;      /* Lima VM boundary + supervisor */
+        --accent-ui: #d792e6;      /* React UI */
+        --accent-shared: #c9b46b;
+        --good: #7cd6a8;
+        --warn: #e8c987;
+        --bad: #e88a8a;
+        --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--sans);
+        font-size: 15px;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .wrap { max-width: 1120px; margin: 0 auto; padding: 56px 24px 96px; }
+
+      header { margin-bottom: 40px; }
+
+      .eyebrow {
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 14px;
+      }
+
+      h1 { font-size: 38px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -0.02em; }
+
+      .lede { color: var(--muted); max-width: 74ch; margin: 0; }
+      .lede strong { color: var(--text); font-weight: 600; }
+
+      h2 {
+        font-size: 13px;
+        font-family: var(--mono);
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 56px 0 16px;
+      }
+
+      h3 { margin: 0 0 6px; font-size: 19px; letter-spacing: -0.01em; }
+
+      .pill {
+        display: inline-block;
+        padding: 2px 9px;
+        border-radius: 999px;
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        font-weight: 600;
+        vertical-align: middle;
+        margin-left: 8px;
+      }
+      .pill.ui    { background: rgba(215,146,230,.14); color: var(--accent-ui); }
+      .pill.host  { background: rgba(143,182,255,.14); color: var(--accent-host); }
+      .pill.agent { background: rgba(124,214,168,.14); color: var(--accent-agent); }
+      .pill.vm    { background: rgba(232,180,120,.14); color: var(--accent-vm); }
+
+      code, .mono { font-family: var(--mono); font-size: 0.92em; }
+      p code, li code, td code, .invariants code, .panel code {
+        background: var(--panel-2);
+        padding: 1px 6px;
+        border-radius: 4px;
+        font-size: 0.88em;
+      }
+
+      .invariants {
+        margin-top: 28px;
+        padding: 16px 18px;
+        border: 1px solid var(--border);
+        background: var(--panel);
+        border-radius: 10px;
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 10px 18px;
+        align-items: start;
+      }
+      .invariants .label {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--accent-shared);
+        padding-top: 3px;
+      }
+      .invariants .val { margin: 0; }
+      .invariants .val strong { color: var(--text); }
+
+      .actors { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+      .actor {
+        border: 1px solid var(--border);
+        background: var(--panel);
+        border-radius: 12px;
+        padding: 18px 18px 16px;
+        display: flex;
+        flex-direction: column;
+      }
+      .actor.ui    { border-top: 2px solid var(--accent-ui); }
+      .actor.host  { border-top: 2px solid var(--accent-host); }
+      .actor.agent { border-top: 2px solid var(--accent-agent); }
+      .actor.vm    { border-top: 2px solid var(--accent-vm); }
+      .actor .who {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 8px;
+      }
+      .actor h3 { font-size: 17px; margin: 0 0 8px; }
+      .actor p { margin: 0 0 8px; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+      .actor .where {
+        margin-top: auto;
+        padding-top: 10px;
+        border-top: 1px dashed var(--border);
+        font-family: var(--mono);
+        font-size: 11.5px;
+        color: var(--text);
+      }
+      .actor .where span { color: var(--muted); }
+
+      .diagram-wrap {
+        border: 1px solid var(--border);
+        background: var(--panel);
+        border-radius: 12px;
+        padding: 22px 22px 16px;
+      }
+      .diagram-wrap p.cap { margin: 0 0 12px; color: var(--muted); font-size: 13.5px; }
+      pre.diagram {
+        margin: 0;
+        font-family: var(--mono);
+        font-size: 12.5px;
+        line-height: 1.55;
+        overflow-x: auto;
+        color: var(--text);
+      }
+      pre.diagram .ui    { color: var(--accent-ui);    }
+      pre.diagram .host  { color: var(--accent-host);  }
+      pre.diagram .agent { color: var(--accent-agent); }
+      pre.diagram .vm    { color: var(--accent-vm);    }
+      pre.diagram .arrow { color: var(--muted);        }
+      pre.diagram .lab   { color: var(--muted);        }
+      pre.diagram .bad   { color: var(--bad);          }
+
+      .legend {
+        margin-top: 14px;
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .legend .swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+
+      .turn { border: 1px solid var(--border); background: var(--panel); border-radius: 12px; padding: 4px 0; }
+      .turn ol { margin: 0; padding: 8px 28px 8px 56px; list-style: decimal; }
+      .turn ol li { padding: 12px 0; border-top: 1px dashed var(--border); }
+      .turn ol li:first-child { border-top: 0; }
+      .turn ol li b { font-weight: 600; }
+      .turn ol li .row { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+      .turn ol li .desc { color: var(--muted); font-size: 13.5px; margin-top: 4px; }
+      .turn ol li .desc code { background: var(--panel-2); padding: 1px 6px; border-radius: 4px; font-size: 0.86em; }
+
+      .panels { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+      .panel { border: 1px solid var(--border); background: var(--panel); border-radius: 12px; padding: 18px 20px; }
+      .panel h3 {
+        font-size: 14px;
+        font-family: var(--mono);
+        letter-spacing: 0.10em;
+        text-transform: uppercase;
+        font-weight: 600;
+        color: var(--muted);
+        margin: 0 0 10px;
+      }
+      .panel .num {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--accent-vm);
+        letter-spacing: 0.1em;
+      }
+      .panel ul { margin: 0; padding-left: 18px; }
+      .panel li { padding: 5px 0; font-size: 13.5px; color: var(--muted); }
+      .panel li strong { color: var(--text); }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+        border: 1px solid var(--border);
+        background: var(--panel);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      th, td { text-align: left; padding: 13px 16px; vertical-align: top; border-top: 1px solid var(--border); }
+      thead th {
+        border-top: 0;
+        background: var(--panel-2);
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+        font-weight: 600;
+      }
+      th.dim {
+        width: 20%;
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        font-weight: 500;
+      }
+      td code { font-size: 0.86em; }
+
+      .sandbox { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+      .sandbox .col { border: 1px solid var(--border); background: var(--panel); border-radius: 12px; padding: 18px 20px; }
+      .sandbox h3 { font-size: 13px; font-family: var(--mono); letter-spacing: 0.12em; text-transform: uppercase; margin: 0 0 4px; }
+      .sandbox .sub { color: var(--muted); font-size: 12.5px; margin: 0 0 12px; }
+      .sandbox .enforced h3 { color: var(--good); }
+      .sandbox .configured h3 { color: var(--warn); }
+      .sandbox ul { margin: 0; padding-left: 18px; }
+      .sandbox li { padding: 5px 0; font-size: 13.5px; color: var(--text); }
+      .sandbox li span { color: var(--muted); }
+
+      .tradeoffs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+      .tradeoffs .col { border: 1px solid var(--border); background: var(--panel); border-radius: 12px; padding: 18px 20px; }
+      .tradeoffs h3 { font-size: 13px; font-family: var(--mono); letter-spacing: 0.12em; text-transform: uppercase; margin: 0 0 10px; }
+      .tradeoffs .buys h3 { color: var(--good); }
+      .tradeoffs .costs h3 { color: var(--accent-vm); }
+      .tradeoffs ol { margin: 0; padding-left: 22px; }
+      .tradeoffs ol li { padding: 6px 0; font-size: 14px; line-height: 1.55; }
+      .tradeoffs ol li strong { color: var(--text); }
+
+      .note {
+        margin-top: 18px;
+        padding: 14px 18px;
+        border: 1px solid var(--border);
+        border-left: 2px solid var(--accent-vm);
+        background: var(--panel);
+        border-radius: 8px;
+        color: var(--muted);
+        font-size: 13.5px;
+      }
+      .note strong { color: var(--text); }
+
+      footer {
+        margin-top: 64px;
+        padding-top: 22px;
+        border-top: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 13px;
+      }
+      footer a { color: var(--accent-host); text-decoration: none; }
+      footer a:hover { text-decoration: underline; }
+
+      @media (max-width: 900px) {
+        .actors, .panels { grid-template-columns: 1fr 1fr; }
+        .sandbox, .tradeoffs { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div class="eyebrow">Capybara · architecture · proposed</div>
+        <h1>Agent-in-VM</h1>
+        <p class="lede">
+          Move the entire agent <strong>inside the Lima VM</strong> and shrink the Electron host to a
+          <strong>control plane</strong>: it holds the API key, proxies LLM traffic, mounts approved
+          directories, and bridges the UI — nothing else. The agent is born inside a kernel-enforced
+          jail with <strong>nothing worth stealing</strong>. This mirrors what Anthropic's own
+          desktop agent (Cowork) and OpenCowork ship: the brain runs in the VM, the host is the bridge.
+        </p>
+
+        <div class="invariants">
+          <div class="label">Boundary</div>
+          <p class="val"><strong>The VM is the trust boundary</strong> — enforced by the hypervisor, not by a config flag. Everything the model can influence lives inside it.</p>
+          <div class="label">Secret</div>
+          <p class="val"><strong>The agent never possesses the API key.</strong> The host injects it onto outbound LLM requests; a fully compromised agent has nothing to exfiltrate.</p>
+          <div class="label">Egress</div>
+          <p class="val"><strong>Deny-by-default.</strong> The VM reaches the network only through the host's domain-allowlisting proxy.</p>
+          <div class="label">Host files</div>
+          <p class="val"><strong>Reachable only via explicit VirtIO mounts</strong>, one directory at a time, each gated by a permission prompt.</p>
+        </div>
+      </header>
+
+      <h2>Actors</h2>
+      <div class="actors">
+        <div class="actor ui">
+          <div class="who">React webview</div>
+          <h3>UI</h3>
+          <p>Renders the conversation, prompts for directory access, surfaces task progress. Talks only to the host.</p>
+          <div class="where">runs on <span>macOS host</span></div>
+        </div>
+        <div class="actor host">
+          <div class="who">Electron · Node</div>
+          <h3>Host = control plane</h3>
+          <p>Holds <code>ANTHROPIC_API_KEY</code>. Runs the egress proxy, mounts directories over VirtIO, bridges UI ↔ agent. Small and auditable — the trusted root.</p>
+          <div class="where">macOS host · <span>holds the key</span></div>
+        </div>
+        <div class="actor agent">
+          <div class="who">Bun · Claude Agent SDK</div>
+          <h3>Agent runtime</h3>
+          <p>Reasons, owns sessions, decides tool calls. Runs the <code>claude</code> CLI. Holds <strong>no secrets</strong>; reaches the LLM only through the host proxy.</p>
+          <div class="where">inside the VM · <span>assume hostile</span></div>
+        </div>
+        <div class="actor vm">
+          <div class="who">Lima · Linux</div>
+          <h3>Supervisor + sandbox</h3>
+          <p>Inner isolation: <code>bwrap</code> + per-session Linux user. Executes the agent's bash in <code>/workspace</code>. No secrets present.</p>
+          <div class="where">inside the VM · <span>nested jail</span></div>
+        </div>
+      </div>
+
+      <h2>The shape</h2>
+      <div class="diagram-wrap">
+        <p class="cap">Two boxes. The host (top) holds the key and is the only exit to the network; the VM (bottom) is the agent's home and the trust boundary. Everything inside the VM is treated as already compromised.</p>
+        <pre class="diagram">
+<span class="lab">                                user</span>
+<span class="arrow">                                │ prompt</span>
+<span class="arrow">                                ▼</span>
+<span class="host">   ┌────────────────────────────┬───────────────────────────────┐</span>
+<span class="host">   │  HOST · control plane · trusted · holds the API key        │</span>
+<span class="host">   │  React UI · Electron main / bridge · egress proxy </span><span class="arrow">────────►</span><span class="host">│</span><span class="host">  api.anthropic.com</span><span class="lab">  (domain allowlist)</span>
+<span class="host">   └────────────┬───────────────────────────┬───────────────────┘</span>
+<span class="lab">                │ control channel           │ LLM calls → host proxy</span>
+<span class="lab">                │ start_task↓  events↑      │ (VM holds no key)</span>
+<span class="vm">   ┌────────────┴───────────────────────────┴───────────────────┐</span>
+<span class="vm">   │  LIMA VM · data plane · assume hostile · </span><span class="bad">NO key, no net</span><span class="vm">    │</span>
+<span class="vm">   │  </span><span class="agent">agent runtime</span><span class="lab"> ──tool/bash──► </span><span class="vm">supervisor (bwrap, per-user) │</span>
+<span class="vm">   │  </span><span class="agent">Bun · Claude SDK · claude CLI</span><span class="vm"> · /workspace · </span><span class="bad">NO secrets</span><span class="vm">   │</span>
+<span class="vm">   └────────────────────────────┬───────────────────────────────┘</span>
+<span class="lab">                                │ VirtIO mount (per-dir permission)</span>
+<span class="arrow">                                ▲</span>
+<span class="host">                       ~/Documents/project</span>
+</pre>
+        <div class="legend">
+          <span><span class="swatch" style="background:var(--accent-host)"></span>host / control plane</span>
+          <span><span class="swatch" style="background:var(--accent-agent)"></span>agent runtime (in VM)</span>
+          <span><span class="swatch" style="background:var(--accent-vm)"></span>VM boundary + supervisor</span>
+        </div>
+      </div>
+
+      <h2>Enforced vs configured boundary</h2>
+      <div class="sandbox">
+        <div class="col configured">
+          <h3>Today — agent on host</h3>
+          <p class="sub">Containment is a request the untrusted runtime interprets about itself.</p>
+          <ul>
+            <li><code>allowedTools</code> <span>— a flag, honored by the thing you don't trust</span></li>
+            <li>key in the agent's <code>env</code> <span>— readable if the runtime is owned</span></li>
+            <li>full macOS filesystem <span>— Bun has no sandbox</span></li>
+            <li>open network <span>— can phone home directly</span></li>
+            <li><strong>blast radius:</strong> <span>the whole Mac + the key</span></li>
+          </ul>
+        </div>
+        <div class="col enforced">
+          <h3>Agent-in-VM</h3>
+          <p class="sub">Containment is a wall the agent cannot reach — the hypervisor enforces it.</p>
+          <ul>
+            <li>kernel boundary <span>— VM, not a config flag</span></li>
+            <li>no key in the VM <span>— host injects it on egress</span></li>
+            <li>only mounted dirs <span>— explicit, per-directory</span></li>
+            <li>egress via host proxy <span>— deny-by-default allowlist</span></li>
+            <li><strong>blast radius:</strong> <span>the VM, and nothing else</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <h2>What lives where</h2>
+      <table>
+        <thead>
+          <tr><th class="dim">Concern</th><th>Host <span class="pill host">control plane</span></th><th>VM <span class="pill vm">data plane</span></th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="dim">API key</td><td>held here; injected onto outbound LLM requests</td><td>never present</td></tr>
+          <tr><td class="dim">Agent reasoning</td><td>—</td><td>Bun + Claude Agent SDK + <code>claude</code> CLI</td></tr>
+          <tr><td class="dim">Command execution</td><td>—</td><td><code>bwrap</code> + per-session user, <code>/workspace</code></td></tr>
+          <tr><td class="dim">Network egress</td><td>domain-allowlisting proxy; the only exit</td><td>deny-by-default; routed to the host proxy</td></tr>
+          <tr><td class="dim">Host files</td><td>mounts approved dirs via VirtIO on permission</td><td>sees them at <code>/sessions/&lt;id&gt;/mnt/</code></td></tr>
+          <tr><td class="dim">UI</td><td>bridges events/messages to the React webview</td><td>emits events over the control channel</td></tr>
+          <tr><td class="dim">Trust</td><td>trusted root — small, auditable</td><td>assume hostile — fully contained</td></tr>
+        </tbody>
+      </table>
+
+      <h2>A turn, end to end</h2>
+      <div class="turn">
+        <ol>
+          <li>
+            <div class="row"><b>UI sends the prompt</b> <span class="pill ui">ui</span><span class="pill host">host</span></div>
+            <div class="desc">The webview hands the task to the Electron main process over IPC (contextBridge).</div>
+          </li>
+          <li>
+            <div class="row"><b>Host dispatches into the VM</b> <span class="pill host">host</span><span class="pill agent">agent</span></div>
+            <div class="desc">The broker delivers <code>start_task</code> to the agent runtime inside the VM over the control channel. The agent owns the session (SDK <code>session_id</code>); <code>resume</code> continues prior turns.</div>
+          </li>
+          <li>
+            <div class="row"><b>Agent reasons; needs the model</b> <span class="pill agent">agent</span></div>
+            <div class="desc">The <code>claude</code> CLI issues an LLM request. The VM has <strong>no key</strong> and <strong>no direct internet</strong>, so the request is pointed at the host proxy (<code>ANTHROPIC_BASE_URL</code> → host).</div>
+          </li>
+          <li>
+            <div class="row"><b>Host proxy injects the key and forwards</b> <span class="pill host">host</span></div>
+            <div class="desc">The egress proxy checks the domain against the allowlist, adds <code>Authorization</code>, and forwards to <code>api.anthropic.com</code>. The response streams back into the VM.</div>
+          </li>
+          <li>
+            <div class="row"><b>Agent runs a command</b> <span class="pill agent">agent</span><span class="pill vm">vm</span></div>
+            <div class="desc">A <code>tool/bash</code> call goes to the supervisor in the same VM, which runs it under <code>bwrap</code> as the per-session user in <code>/workspace</code> — never leaving the jail.</div>
+          </li>
+          <li>
+            <div class="row"><b>Agent needs a host directory</b> <span class="pill agent">agent</span><span class="pill host">host</span></div>
+            <div class="desc">It requests access; the host shows a permission prompt and, on approval, mounts that one directory over VirtIO at <code>/sessions/&lt;id&gt;/mnt/&lt;name&gt;</code>.</div>
+          </li>
+          <li>
+            <div class="row"><b>Messages stream to the UI</b> <span class="pill agent">agent</span><span class="pill host">host</span><span class="pill ui">ui</span></div>
+            <div class="desc">Assistant text and the final result travel back over the control channel; the host bridges them to the webview. The turn ends; the agent process can exit cleanly.</div>
+          </li>
+        </ol>
+      </div>
+
+      <h2>Network egress — deny by default</h2>
+      <p class="lede" style="margin-bottom:18px">
+        Both halves matter: filesystem containment alone still lets a compromised agent phone home. Layered, so a single bypass isn't a breakout — the same posture Cowork ships.
+      </p>
+      <div class="panels">
+        <div class="panel">
+          <div class="num">LAYER 1</div>
+          <h3>No raw sockets</h3>
+          <ul>
+            <li>the VM has <strong>no default route</strong> to the internet</li>
+            <li>direct outbound connections simply fail</li>
+            <li>the only reachable endpoint is the host</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <div class="num">LAYER 2</div>
+          <h3>Host proxy</h3>
+          <ul>
+            <li>all VM egress funnels through one host-side proxy</li>
+            <li>injects the <strong>API key</strong> the VM never holds</li>
+            <li>the single, auditable exit point</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <div class="num">LAYER 3</div>
+          <h3>Domain allowlist</h3>
+          <ul>
+            <li>only approved domains pass — e.g. the LLM API</li>
+            <li>everything else is <strong>blocked</strong></li>
+            <li>new domains require an explicit prompt</li>
+          </ul>
+        </div>
+      </div>
+
+      <h2>What the move buys — and costs</h2>
+      <div class="tradeoffs">
+        <div class="col buys">
+          <h3>Buys</h3>
+          <ol>
+            <li><strong>Enforced containment.</strong> Even total compromise of the model, the SDK, the <code>claude</code> binary, or any dependency is confined to the VM.</li>
+            <li><strong>Key is unstealable.</strong> The agent never holds it; the host injects it on egress. Nothing to leak.</li>
+            <li><strong>Tiny trusted root.</strong> The host shrinks to a key-injecting proxy + mounts + bridge — small enough to actually audit.</li>
+            <li><strong>Matches the desktop-agent peers.</strong> Cowork and OpenCowork converged on exactly this; the host's job (egress proxy, VirtIO mounts, bridge) is the validated shape.</li>
+          </ol>
+        </div>
+        <div class="col costs">
+          <h3>Costs</h3>
+          <ol>
+            <li><strong>Linux agent runtime.</strong> Bun + the <code>claude</code> CLI must run in the VM (linux-x64), not on macOS — a second native build path.</li>
+            <li><strong>The host becomes an LLM proxy.</strong> A real forwarding service with its own failure modes, not just an stdio broker.</li>
+            <li><strong>Host files need mounts.</strong> "Work on my folder" becomes an explicit VirtIO mount + permission, not ambient host access.</li>
+            <li><strong>Trust shifts to the proxy.</strong> The proxy is now the trusted root — acceptable, because it's small and reviewable versus an opaque 200&nbsp;MB binary.</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="note">
+        <strong>Deliberate carve-outs, made visible.</strong> Some capabilities can't live in the VM — e.g. driving the user's real browser with their real cookies (Cowork runs this on the host on purpose). Treat each as a narrow, named hole the user understands, never a broad default the security argument silently leans on.
+      </div>
+
+      <footer>
+        Proposed direction for Capybara · agent-in-VM. Peers: Anthropic <em>Claude Cowork</em> (agent in an Apple-Virtualization Linux VM; gVisor + bwrap; host-side allowlisting egress proxy) and <em>OpenCowork</em> (Lima on macOS, WSL2 on Windows). Contrast with developer CLIs — Claude Code and Cursor keep the agent on the host and sandbox only its commands.
+      </footer>
+    </div>
+  </body>
+</html>
