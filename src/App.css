@@ -76,7 +76,11 @@ button {
   border-radius: 999px;
   font-size: 0.85em;
   font-weight: 500;
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
     sans-serif;
   margin-top: 1em;
 }

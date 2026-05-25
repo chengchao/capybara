@@ -34,12 +34,7 @@ async function main() {
   }
 }
 
-async function installRuntime(
-  name: string,
-  runtime: RuntimeEntry,
-  target: string,
-  tmp: string,
-) {
+async function installRuntime(name: string, runtime: RuntimeEntry, target: string, tmp: string) {
   if (isInstalled(name, target)) {
     log(`${name}: already installed; skipping`);
     return;
@@ -86,12 +81,7 @@ function isInstalled(name: string, target: string): boolean {
 // (e.g. linux-gnu) requires updating both the manifest URL and the
 // extraction path below, since Bun's archive interior changes shape
 // across OSes (bun-darwin-* vs bun-linux-*).
-async function extract(
-  name: string,
-  archive: string,
-  target: string,
-  tmp: string,
-) {
+async function extract(name: string, archive: string, target: string, tmp: string) {
   switch (name) {
     case "bun": {
       const stage = join(tmp, `stage-${name}`);

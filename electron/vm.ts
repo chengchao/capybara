@@ -1,7 +1,8 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdir, writeFile, stat } from "node:fs/promises";
-import path from "node:path";
 import { homedir } from "node:os";
+import path from "node:path";
+
 import { app } from "electron";
 
 const INSTANCE_NAME = "agent";
@@ -59,21 +60,14 @@ function paths(): LimaPaths {
   if (cachedPaths) return cachedPaths;
   // Dev: vendor/ and resources/ live at project root. Prod:
   // process.resourcesPath after electron-builder packaging.
-  const resourceDir = app.isPackaged
-    ? process.resourcesPath
-    : app.getAppPath();
+  const resourceDir = app.isPackaged ? process.resourcesPath : app.getAppPath();
   // LIMA_HOME must stay short on macOS: Lima writes `<LIMA_HOME>/<instance>/ssh.sock.<PID>`,
   // bounded by UNIX_PATH_MAX (104). `~/Library/Application Support/<bundle-id>/lima/`
   // already pushes that to ~107 with a 16-digit PID, so anchor at `~/.capybara/lima`.
   cachedPaths = {
     limactl: path.join(resourceDir, "vendor", "lima", "bin", "limactl"),
     limaHome: path.join(homedir(), ".capybara", "lima"),
-    supervisorSource: path.join(
-      resourceDir,
-      "resources",
-      "supervisor",
-      "capybara_supervisor.py",
-    ),
+    supervisorSource: path.join(resourceDir, "resources", "supervisor", "capybara_supervisor.py"),
     hostHome: homedir(),
   };
   return cachedPaths;
@@ -134,11 +128,7 @@ async function runLimactl(args: string[]): Promise<string> {
       if (code === 0) {
         resolve(stdout);
       } else {
-        reject(
-          new Error(
-            `limactl exited ${code ?? "?"}: ${stderr.trim() || "(no stderr)"}`,
-          ),
-        );
+        reject(new Error(`limactl exited ${code ?? "?"}: ${stderr.trim() || "(no stderr)"}`));
       }
     });
   });
@@ -189,20 +179,8 @@ async function installSupervisor(): Promise<void> {
   const p = paths();
   await ensureRegularFile(p.supervisorSource);
   process.stderr.write("vm: installing supervisor...\n");
-  await runLimactl([
-    "shell",
-    INSTANCE_NAME,
-    "--",
-    "sudo",
-    "mkdir",
-    "-p",
-    "/opt/capybara",
-  ]);
-  await runLimactl([
-    "copy",
-    p.supervisorSource,
-    `${INSTANCE_NAME}:/tmp/capybara_supervisor.py`,
-  ]);
+  await runLimactl(["shell", INSTANCE_NAME, "--", "sudo", "mkdir", "-p", "/opt/capybara"]);
+  await runLimactl(["copy", p.supervisorSource, `${INSTANCE_NAME}:/tmp/capybara_supervisor.py`]);
   await runLimactl([
     "shell",
     INSTANCE_NAME,
@@ -300,14 +278,7 @@ export class SupervisorClient {
     const p = paths();
     this.child = spawn(
       p.limactl,
-      [
-        "shell",
-        INSTANCE_NAME,
-        "--",
-        "sudo",
-        "python3",
-        "/opt/capybara/supervisor.py",
-      ],
+      ["shell", INSTANCE_NAME, "--", "sudo", "python3", "/opt/capybara/supervisor.py"],
       {
         env: { ...process.env, LIMA_HOME: p.limaHome },
         stdio: ["pipe", "pipe", "inherit"],
@@ -323,11 +294,7 @@ export class SupervisorClient {
     this.linesIter = lineIterator(this.child.stdout);
   }
 
-  private async send(
-    method: string,
-    params: unknown,
-    timeoutMs: number,
-  ): Promise<unknown> {
+  private async send(method: string, params: unknown, timeoutMs: number): Promise<unknown> {
     if (!this.child || !this.child.stdin || !this.linesIter) {
       throw new Error("supervisor handle is not initialized");
     }
@@ -365,9 +332,7 @@ export class SupervisorClient {
   }
 }
 
-async function* lineIterator(
-  stream: NodeJS.ReadableStream,
-): AsyncGenerator<string> {
+async function* lineIterator(stream: NodeJS.ReadableStream): AsyncGenerator<string> {
   let buffer = "";
   for await (const chunk of stream) {
     buffer += (chunk as Buffer).toString("utf8");
@@ -387,10 +352,7 @@ async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
     return await Promise.race([
       p,
       new Promise<T>((_, reject) => {
-        timer = setTimeout(
-          () => reject(new Error("supervisor response timed out")),
-          ms,
-        );
+        timer = setTimeout(() => reject(new Error("supervisor response timed out")), ms);
       }),
     ]);
   } finally {
@@ -414,14 +376,10 @@ async function smokeTestSupervisor(client: SupervisorClient): Promise<void> {
       commandResponseTimeoutMs(5000),
     )) as { exitCode?: number; stderr?: string };
     if (result.exitCode !== 0) {
-      throw new Error(
-        `smoke command failed with ${result.exitCode}: ${result.stderr ?? ""}`,
-      );
+      throw new Error(`smoke command failed with ${result.exitCode}: ${result.stderr ?? ""}`);
     }
   } finally {
-    await client
-      .request("delete_session", { session_id: "smoke_session" })
-      .catch(() => {});
+    await client.request("delete_session", { session_id: "smoke_session" }).catch(() => {});
   }
 }
 
@@ -438,21 +396,13 @@ export async function ensureVm(): Promise<void> {
     const existing = instances.find((i) => i.name === INSTANCE_NAME);
 
     if (!existing) {
-      process.stderr.write(
-        "vm: downloading image (first run, this may take a minute)...\n",
-      );
+      process.stderr.write("vm: downloading image (first run, this may take a minute)...\n");
       const yamlPath = path.join(p.limaHome, `${INSTANCE_NAME}.yaml`);
       await writeFile(yamlPath, AGENT_YAML, "utf8");
       // The raw host-home mount is a supervisor source path, not a sandbox path.
       // Session commands run through bubblewrap and only see approved subdirs
       // rebound into /mnt/<name>.
-      await runLimactl([
-        "create",
-        "--name",
-        INSTANCE_NAME,
-        "--tty=false",
-        yamlPath,
-      ]);
+      await runLimactl(["create", "--name", INSTANCE_NAME, "--tty=false", yamlPath]);
       process.stderr.write("vm: starting...\n");
       await runLimactl(["start", INSTANCE_NAME, "--tty=false"]);
     } else if (existing.status !== "Running") {
@@ -483,9 +433,7 @@ export async function ensureVm(): Promise<void> {
 
 export function getSupervisor(): SupervisorClient {
   if (!supervisor) {
-    throw new Error(
-      "supervisor not initialized; VM is still starting or failed to boot",
-    );
+    throw new Error("supervisor not initialized; VM is still starting or failed to boot");
   }
   return supervisor;
 }
@@ -497,9 +445,7 @@ export async function stopSupervisor(): Promise<void> {
   try {
     await client.shutdown();
   } catch (e) {
-    process.stderr.write(
-      `vm: supervisor shutdown failed: ${(e as Error).message}\n`,
-    );
+    process.stderr.write(`vm: supervisor shutdown failed: ${(e as Error).message}\n`);
   }
 }
 

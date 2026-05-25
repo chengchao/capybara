@@ -1,14 +1,10 @@
-import { app, BrowserWindow, ipcMain } from "electron";
-import path from "node:path";
 import { randomUUID } from "node:crypto";
-import {
-  ensureVm,
-  getVmStatus,
-  setStatusEmitter,
-  stopSupervisor,
-  stopVm,
-} from "./vm";
+import path from "node:path";
+
+import { app, BrowserWindow, ipcMain } from "electron";
+
 import { runAgentTask } from "./agent/runTask";
+import { ensureVm, getVmStatus, setStatusEmitter, stopSupervisor, stopVm } from "./vm";
 
 const DEV_URL = process.env.ELECTRON_DEV_URL;
 
@@ -37,9 +33,7 @@ if (!gotLock) {
       mainWindow.loadURL(DEV_URL);
       mainWindow.webContents.openDevTools({ mode: "detach" });
     } else {
-      mainWindow.loadFile(
-        path.join(__dirname, "..", "..", "dist", "index.html"),
-      );
+      mainWindow.loadFile(path.join(__dirname, "..", "..", "dist", "index.html"));
     }
   }
 
@@ -101,10 +95,7 @@ if (!gotLock) {
     try {
       for (const controller of activeTasks.values()) controller.abort();
       await stopSupervisor();
-      await Promise.race([
-        stopVm(),
-        new Promise((resolve) => setTimeout(resolve, 10_000)),
-      ]);
+      await Promise.race([stopVm(), new Promise((resolve) => setTimeout(resolve, 10_000))]);
     } catch (e) {
       process.stderr.write(`shutdown error: ${(e as Error).message}\n`);
     } finally {

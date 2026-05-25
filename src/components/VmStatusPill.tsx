@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+
 import { getVmStatus, subscribeVmStatus, type VmStatus } from "../lib/vm";
 
 export default function VmStatusPill() {

@@ -1,10 +1,8 @@
-import {
-  createSdkMcpServer,
-  query,
-  type Options,
-} from "@anthropic-ai/claude-agent-sdk";
 import path from "node:path";
+
+import { createSdkMcpServer, query, type Options } from "@anthropic-ai/claude-agent-sdk";
 import { app } from "electron";
+
 import { getSupervisor } from "../vm";
 import { buildTools, SESSION_ID } from "./tools";
 

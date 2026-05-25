@@ -1,13 +1,16 @@
 {
   "name": "capybara",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
   "type": "module",
   "main": "electron/dist/main.cjs",
   "scripts": {
     "setup:runtimes": "bun run ./scripts/fetch-runtimes.ts",
     "check:electron": "tsc --noEmit -p electron",
     "check:renderer": "tsc --noEmit",
+    "lint": "oxlint -D correctness",
+    "fmt": "oxfmt",
+    "fmt:check": "oxfmt --check",
     "build:electron": "bun build electron/main.ts --target=node --format=cjs --external @anthropic-ai/claude-agent-sdk --outfile electron/dist/main.cjs && bun build electron/preload.ts --target=node --format=cjs --outfile electron/dist/preload.cjs",
     "build:renderer": "tsc && vite build",
     "dev": "vite",
@@ -32,6 +35,8 @@
     "concurrently": "^9.2.1",
     "electron": "^42.0.1",
     "electron-builder": "^26.8.1",
+    "oxfmt": "^0.51.0",
+    "oxlint": "^1.66.0",
     "typescript": "~5.8.3",
     "vite": "^7.0.4",
     "wait-on": "^9.0.10"

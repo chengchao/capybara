@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+
 import { startAgentTask, subscribeAgentEvents } from "../lib/agent";
 
 export default function AgentProbe() {
@@ -9,10 +10,7 @@ export default function AgentProbe() {
 
   useEffect(() => {
     const unsubscribe = subscribeAgentEvents((event) => {
-      setEvents((prev) => [
-        JSON.stringify(event, null, 2),
-        ...prev,
-      ].slice(0, 20));
+      setEvents((prev) => [JSON.stringify(event, null, 2), ...prev].slice(0, 20));
     });
     return unsubscribe;
   }, []);

@@ -1,5 +1,6 @@
-import VmStatusPill from "./components/VmStatusPill";
 import AgentProbe from "./components/AgentProbe";
+import VmStatusPill from "./components/VmStatusPill";
+
 import "./App.css";
 
 function App() {

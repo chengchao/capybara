@@ -1,5 +1,6 @@
 import { tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
+
 import { commandResponseTimeoutMs, type SupervisorClient } from "../vm";
 
 export const SESSION_ID = "agent_default";
@@ -86,15 +87,10 @@ export function buildTools(supervisor: SupervisorClient) {
     "Read",
     "Read the contents of a file inside the Capybara sandbox. Returns the file's text.",
     {
-      file_path: z
-        .string()
-        .describe("Absolute path to the file inside the sandbox."),
+      file_path: z.string().describe("Absolute path to the file inside the sandbox."),
     },
     async (args) => {
-      const result = await runInSandbox(
-        supervisor,
-        `cat -- ${shellQuote(args.file_path)}`,
-      );
+      const result = await runInSandbox(supervisor, `cat -- ${shellQuote(args.file_path)}`);
       return asToolResult(result, "(empty file)");
     },
   );
