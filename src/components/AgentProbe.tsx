@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+
 import { startAgentTask, subscribeAgentEvents } from "../lib/agent";
 
 export default function AgentProbe() {
@@ -29,21 +32,26 @@ export default function AgentProbe() {
   }
 
   return (
-    <section className="agent-probe">
-      <div className="agent-probe__row">
-        <input
+    <section className="mx-auto flex w-[min(960px,calc(100%-2rem))] flex-col items-stretch gap-3">
+      <div className="flex gap-2">
+        <Input
           value={prompt}
           onChange={(e) => setPrompt(e.currentTarget.value)}
           placeholder="Ask the agent..."
+          className="flex-1"
         />
-        <button type="button" onClick={runAgent} disabled={busy}>
+        <Button type="button" onClick={runAgent} disabled={busy}>
           Run Agent
-        </button>
+        </Button>
       </div>
-      <pre className="agent-probe__events">
+      <pre className="max-h-72 min-h-40 w-full overflow-auto rounded-md border bg-muted p-3 text-left font-mono text-sm break-words whitespace-pre-wrap">
         {events.length ? events.join("\n\n") : "(no agent events yet)"}
       </pre>
-      {error && <pre className="probe-error">{error}</pre>}
+      {error && (
+        <pre className="w-full rounded-md border border-destructive/30 bg-destructive/10 p-3 text-left font-mono text-sm break-words whitespace-pre-wrap text-destructive">
+          {error}
+        </pre>
+      )}
     </section>
   );
 }
