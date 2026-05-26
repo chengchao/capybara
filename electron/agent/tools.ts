@@ -3,7 +3,6 @@ import { z } from "zod";
 
 import { commandResponseTimeoutMs, type SupervisorClient } from "../vm";
 
-export const SESSION_ID = "agent_default";
 const DEFAULT_TIMEOUT_MS = 60_000;
 const DEFAULT_CWD = "/workspace";
 
@@ -21,6 +20,7 @@ type ToolResult = {
 
 async function runInSandbox(
   supervisor: SupervisorClient,
+  sessionId: string,
   command: string,
   options: { cwd?: string; timeoutMs?: number } = {},
 ): Promise<RunResult> {
@@ -28,7 +28,7 @@ async function runInSandbox(
   return (await supervisor.request(
     "run_as_session",
     {
-      session_id: SESSION_ID,
+      session_id: sessionId,
       command,
       cwd: options.cwd ?? DEFAULT_CWD,
       timeout_ms: timeoutMs,
@@ -57,7 +57,11 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
-export function buildTools(supervisor: SupervisorClient) {
+// `resolveSession` returns the VM sandbox session id for the current
+// conversation, creating it on first use. It's a thunk (not a plain string)
+// because for a new conversation the id isn't known until the SDK emits its
+// `init` message — which always precedes the first tool call.
+export function buildTools(supervisor: SupervisorClient, resolveSession: () => Promise<string>) {
   const bash = tool(
     "Bash",
     "Execute a bash command inside the Capybara sandbox. Working directory defaults to /workspace; allowed cwd roots are /workspace, /home/capybara, /tmp, and /mnt. Use for any shell-shaped task.",
@@ -75,7 +79,8 @@ export function buildTools(supervisor: SupervisorClient) {
         .describe("Max execution time in milliseconds. Default 60000."),
     },
     async (args) => {
-      const result = await runInSandbox(supervisor, args.command, {
+      const sessionId = await resolveSession();
+      const result = await runInSandbox(supervisor, sessionId, args.command, {
         cwd: args.cwd,
         timeoutMs: args.timeout_ms,
       });
@@ -90,7 +95,12 @@ export function buildTools(supervisor: SupervisorClient) {
       file_path: z.string().describe("Absolute path to the file inside the sandbox."),
     },
     async (args) => {
-      const result = await runInSandbox(supervisor, `cat -- ${shellQuote(args.file_path)}`);
+      const sessionId = await resolveSession();
+      const result = await runInSandbox(
+        supervisor,
+        sessionId,
+        `cat -- ${shellQuote(args.file_path)}`,
+      );
       return asToolResult(result, "(empty file)");
     },
   );
@@ -108,11 +118,12 @@ export function buildTools(supervisor: SupervisorClient) {
         ),
     },
     async (args) => {
+      const sessionId = await resolveSession();
       const root = args.path ?? "/workspace";
       // bash globstar + nullglob: `**` matches recursively, no-match expands
       // to nothing instead of literal pattern text.
       const cmd = `shopt -s globstar nullglob; cd ${shellQuote(root)} && for f in ${args.pattern}; do printf "%s\\n" "$f"; done`;
-      const result = await runInSandbox(supervisor, cmd);
+      const result = await runInSandbox(supervisor, sessionId, cmd);
       return asToolResult(result, "(no matches)");
     },
   );

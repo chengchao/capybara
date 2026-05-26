@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Capybara — docs</title>
+    <style>
+      :root {
+        --bg: #0f1115;
+        --panel: #161922;
+        --panel-2: #1c2030;
+        --border: #262b3a;
+        --text: #e6e8ee;
+        --muted: #9aa1b2;
+        --accent-host: #8fb6ff;
+        --accent-agent: #7cd6a8;
+        --accent-vm: #e8b478;
+        --accent-ui: #d792e6;
+        --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--sans);
+        font-size: 15px;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .wrap {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 56px 24px 96px;
+      }
+
+      header {
+        margin-bottom: 40px;
+      }
+
+      .eyebrow {
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 14px;
+      }
+
+      h1 {
+        font-size: 38px;
+        line-height: 1.15;
+        margin: 0 0 14px;
+        letter-spacing: -0.02em;
+      }
+
+      .lede {
+        color: var(--muted);
+        max-width: 70ch;
+        margin: 0;
+      }
+      .lede strong {
+        color: var(--text);
+        font-weight: 600;
+      }
+
+      h2 {
+        font-size: 13px;
+        font-family: var(--mono);
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 48px 0 16px;
+      }
+
+      .cards {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+
+      a.card {
+        display: block;
+        border: 1px solid var(--border);
+        background: var(--panel);
+        border-radius: 12px;
+        padding: 20px 22px;
+        text-decoration: none;
+        color: inherit;
+        transition:
+          border-color 0.15s ease,
+          transform 0.15s ease,
+          background 0.15s ease;
+      }
+      a.card:hover {
+        border-color: var(--accent-host);
+        transform: translateY(-2px);
+        background: var(--panel-2);
+      }
+      a.card.accent-host {
+        border-top: 2px solid var(--accent-host);
+      }
+      a.card.accent-agent {
+        border-top: 2px solid var(--accent-agent);
+      }
+      a.card.accent-vm {
+        border-top: 2px solid var(--accent-vm);
+      }
+      a.card.accent-ui {
+        border-top: 2px solid var(--accent-ui);
+      }
+
+      .card .tag {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 10px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .card .badge {
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        padding: 1px 7px;
+        border-radius: 999px;
+        font-weight: 600;
+      }
+      .badge.proposed {
+        background: rgba(232, 180, 120, 0.16);
+        color: var(--accent-vm);
+      }
+      .badge.current {
+        background: rgba(124, 214, 168, 0.16);
+        color: var(--accent-agent);
+      }
+
+      .card h3 {
+        margin: 0 0 8px;
+        font-size: 19px;
+        letter-spacing: -0.01em;
+      }
+      .card p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13.5px;
+        line-height: 1.55;
+      }
+      .card .file {
+        margin-top: 12px;
+        font-family: var(--mono);
+        font-size: 11.5px;
+        color: var(--accent-host);
+      }
+
+      footer {
+        margin-top: 56px;
+        padding-top: 22px;
+        border-top: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      @media (max-width: 760px) {
+        .cards {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div class="eyebrow">Capybara · docs</div>
+        <h1>Architecture &amp; design notes</h1>
+        <p class="lede">
+          How Capybara fits together — the <strong>Electron host</strong>, the
+          <strong>per-turn agent</strong>, and the <strong>Lima VM + supervisor</strong> — plus the
+          design directions we're weighing.
+        </p>
+      </header>
+
+      <h2>Architecture</h2>
+      <div class="cards">
+        <a class="card accent-host" href="architecture.html">
+          <div class="tag">overview <span class="badge current">current</span></div>
+          <h3>Architecture</h3>
+          <p>
+            The whole picture: the Electron main host, the in-process Claude Agent SDK, the Lima VM,
+            and the supervisor — and how they connect.
+          </p>
+          <div class="file">architecture.html →</div>
+        </a>
+
+        <a class="card accent-agent" href="per-turn-flow.html">
+          <div class="tag">flow <span class="badge current">current</span></div>
+          <h3>Per-turn flow</h3>
+          <p>
+            How a single turn runs end to end — one <code>query()</code> per prompt, in-process in
+            Electron main — and what lives one turn vs. forever.
+          </p>
+          <div class="file">per-turn-flow.html →</div>
+        </a>
+
+        <a class="card accent-vm" href="agent-in-vm.html">
+          <div class="tag">architecture <span class="badge proposed">proposed</span></div>
+          <h3>Agent-in-VM</h3>
+          <p>
+            Move the whole agent into the Lima VM and shrink the host to a key-injecting control
+            plane. Why the VM — not a config flag — should be the trust boundary.
+          </p>
+          <div class="file">agent-in-vm.html →</div>
+        </a>
+
+        <a class="card accent-ui" href="supervisor-protocol.md">
+          <div class="tag">protocol</div>
+          <h3>Supervisor protocol</h3>
+          <p>
+            The newline-delimited JSON-RPC contract between the host and the VM supervisor: session
+            lifecycle, command execution, and framing.
+          </p>
+          <div class="file">supervisor-protocol.md →</div>
+        </a>
+      </div>
+
+      <footer>
+        Capybara · Electron host + in-process Claude Agent SDK + Lima VM + Python supervisor.
+      </footer>
+    </div>
+  </body>
+</html>

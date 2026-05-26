@@ -1,0 +1,51 @@
+// Folder-specific settings — Oxc (oxlint + oxfmt) for JS/TS/TSX.
+//
+// Requires the "Oxc" Zed extension (Zed >= v0.205.0) and project-local
+// oxlint/oxfmt (in devDependencies). Mirrors the upstream oxc-zed "both"
+// example: oxfmt formats, then source.fixAll.oxc applies oxlint autofixes.
+{
+  "format_on_save": "on",
+  "lsp": {
+    "oxlint": {
+      "initialization_options": {
+        "settings": {
+          "run": "onType",
+          "fixKind": "safe_fix"
+        }
+      }
+    },
+    "oxfmt": {
+      "initialization_options": {
+        "settings": {
+          "run": "onSave"
+        }
+      }
+    }
+  },
+  "languages": {
+    "JavaScript": {
+      "language_servers": ["oxlint", "oxfmt", "!biome", "..."],
+      "prettier": { "allowed": false },
+      "formatter": [
+        { "language_server": { "name": "oxfmt" } },
+        { "code_action": "source.fixAll.oxc" }
+      ]
+    },
+    "TypeScript": {
+      "language_servers": ["oxlint", "oxfmt", "!biome", "..."],
+      "prettier": { "allowed": false },
+      "formatter": [
+        { "language_server": { "name": "oxfmt" } },
+        { "code_action": "source.fixAll.oxc" }
+      ]
+    },
+    "TSX": {
+      "language_servers": ["oxlint", "oxfmt", "!biome", "..."],
+      "prettier": { "allowed": false },
+      "formatter": [
+        { "language_server": { "name": "oxfmt" } },
+        { "code_action": "source.fixAll.oxc" }
+      ]
+    }
+  }
+}
