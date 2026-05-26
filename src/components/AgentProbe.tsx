@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+
 import { startAgentTask, subscribeAgentEvents } from "../lib/agent";
 
 export default function AgentProbe() {
@@ -40,19 +43,20 @@ export default function AgentProbe() {
   }
 
   return (
-    <section className="agent-probe">
-      <div className="agent-probe__row">
-        <input
+    <section className="mx-auto flex w-[min(960px,calc(100%-2rem))] flex-col items-stretch gap-3">
+      <div className="flex gap-2">
+        <Input
           value={prompt}
           onChange={(e) => setPrompt(e.currentTarget.value)}
           placeholder="Ask the agent..."
+          className="flex-1"
         />
-        <button type="button" onClick={runAgent} disabled={busy}>
+        <Button type="button" onClick={runAgent} disabled={busy}>
           Run Agent
-        </button>
+        </Button>
       </div>
-      <div className="agent-probe__row">
-        <label>
+      <div className="flex flex-wrap items-center gap-3 text-sm">
+        <label className="flex items-center gap-1.5">
           <input
             type="checkbox"
             checked={resume}
@@ -60,15 +64,27 @@ export default function AgentProbe() {
           />
           Continue conversation
         </label>
-        <button type="button" onClick={newConversation} disabled={busy || !sessionId}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={newConversation}
+          disabled={busy || !sessionId}
+        >
           New conversation
-        </button>
-        <span>{sessionId ? `session ${sessionId.slice(0, 8)}…` : "no session yet"}</span>
+        </Button>
+        <span className="text-muted-foreground">
+          {sessionId ? `session ${sessionId.slice(0, 8)}…` : "no session yet"}
+        </span>
       </div>
-      <pre className="agent-probe__events">
+      <pre className="max-h-72 min-h-40 w-full overflow-auto rounded-md border bg-muted p-3 text-left font-mono text-sm break-words whitespace-pre-wrap">
         {events.length ? events.join("\n\n") : "(no agent events yet)"}
       </pre>
-      {error && <pre className="probe-error">{error}</pre>}
+      {error && (
+        <pre className="w-full rounded-md border border-destructive/30 bg-destructive/10 p-3 text-left font-mono text-sm break-words whitespace-pre-wrap text-destructive">
+          {error}
+        </pre>
+      )}
     </section>
   );
 }
