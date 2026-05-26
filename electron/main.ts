@@ -54,10 +54,16 @@ if (!gotLock) {
 
   ipcMain.handle(
     "start-agent-task",
-    async (event, prompt: unknown): Promise<{ taskId: string }> => {
+    async (
+      event,
+      args: { prompt?: unknown; resumeSessionId?: unknown },
+    ): Promise<{ taskId: string }> => {
+      const prompt = args?.prompt;
       if (typeof prompt !== "string" || prompt.trim() === "") {
         throw new Error("prompt is required");
       }
+      const resumeSessionId =
+        typeof args?.resumeSessionId === "string" ? args.resumeSessionId : undefined;
       const taskId = randomUUID();
       const controller = new AbortController();
       activeTasks.set(taskId, controller);
@@ -66,6 +72,7 @@ if (!gotLock) {
         taskId,
         (msg) => event.sender.send("agent-event", msg),
         controller,
+        resumeSessionId,
       ).finally(() => activeTasks.delete(taskId));
       return { taskId };
     },

@@ -4,7 +4,8 @@ type Unsubscribe = () => void;
 
 const api = {
   getVmStatus: () => ipcRenderer.invoke("get-vm-status"),
-  startAgentTask: (prompt: string) => ipcRenderer.invoke("start-agent-task", prompt),
+  startAgentTask: (args: { prompt: string; resumeSessionId?: string }) =>
+    ipcRenderer.invoke("start-agent-task", args),
   onVmStatus: (callback: (status: unknown) => void): Unsubscribe => {
     const listener = (_event: IpcRendererEvent, status: unknown) => callback(status);
     ipcRenderer.on("vm-status", listener);

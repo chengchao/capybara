@@ -2,7 +2,10 @@ declare global {
   interface Window {
     capybara: {
       getVmStatus: () => Promise<VmStatus>;
-      startAgentTask: (prompt: string) => Promise<{ taskId: string }>;
+      startAgentTask: (args: {
+        prompt: string;
+        resumeSessionId?: string;
+      }) => Promise<{ taskId: string }>;
       onVmStatus: (callback: (status: VmStatus) => void) => () => void;
       onAgentEvent: (callback: (event: AgentEvent) => void) => () => void;
     };
@@ -16,6 +19,7 @@ export type VmStatus =
 
 export type AgentEvent =
   | { event: "task_started"; taskId: string }
+  | { event: "session_started"; taskId: string; sessionId: string }
   | { event: "assistant_message"; taskId: string; text: string }
   | {
       event: "tool_use";
@@ -31,4 +35,4 @@ export type AgentEvent =
       content: unknown;
       isError: boolean;
     }
-  | { event: "task_finished"; taskId: string };
+  | { event: "task_finished"; taskId: string; sessionId?: string };

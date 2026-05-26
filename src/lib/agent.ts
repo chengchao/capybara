@@ -2,8 +2,11 @@ import type { AgentEvent } from "./host";
 
 export type { AgentEvent };
 
-export function startAgentTask(prompt: string): Promise<{ taskId: string }> {
-  return window.capybara.startAgentTask(prompt);
+export function startAgentTask(args: {
+  prompt: string;
+  resumeSessionId?: string;
+}): Promise<{ taskId: string }> {
+  return window.capybara.startAgentTask(args);
 }
 
 export function subscribeAgentEvents(cb: (event: AgentEvent) => void): () => void {

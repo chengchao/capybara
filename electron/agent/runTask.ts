@@ -4,7 +4,7 @@ import { createSdkMcpServer, query, type Options } from "@anthropic-ai/claude-ag
 import { app } from "electron";
 
 import { getSupervisor } from "../vm";
-import { buildTools, SESSION_ID } from "./tools";
+import { buildTools } from "./tools";
 
 const TOOL_PREFIX = "mcp__capybara__";
 const ALLOWED_TOOLS = ["Bash", "Read", "Glob"].map((name) => TOOL_PREFIX + name);
@@ -15,6 +15,7 @@ const SYSTEM_PROMPT = `You are Capybara, an office-work agent. Your tools (Bash,
 
 export type AgentEvent =
   | { event: "task_started"; taskId: string }
+  | { event: "session_started"; taskId: string; sessionId: string }
   | { event: "assistant_message"; taskId: string; text: string }
   | {
       event: "tool_use";
@@ -30,21 +31,9 @@ export type AgentEvent =
       content: unknown;
       isError: boolean;
     }
-  | { event: "task_finished"; taskId: string };
+  | { event: "task_finished"; taskId: string; sessionId?: string };
 
 type AgentEventEmitter = (event: AgentEvent) => void;
-
-let cachedMcpServer: ReturnType<typeof createSdkMcpServer> | null = null;
-
-function ensureSessionAndMcp() {
-  if (cachedMcpServer) return cachedMcpServer;
-  const supervisor = getSupervisor();
-  cachedMcpServer = createSdkMcpServer({
-    name: "capybara",
-    tools: buildTools(supervisor),
-  });
-  return cachedMcpServer;
-}
 
 // SDK ≥0.2.113 spawns a per-arch native `claude` binary from
 // `@anthropic-ai/claude-agent-sdk-<triple>/claude`. In dev the SDK's own
@@ -135,13 +124,32 @@ export async function runAgentTask(
   taskId: string,
   emit: AgentEventEmitter,
   abortController?: AbortController,
+  resumeSessionId?: string,
 ): Promise<void> {
   emit({ event: "task_started", taskId });
-  try {
-    const supervisor = getSupervisor();
-    await supervisor.request("create_session", { session_id: SESSION_ID });
 
-    const mcp = ensureSessionAndMcp();
+  const supervisor = getSupervisor();
+  // The SDK session id doubles as the VM sandbox session id: a new
+  // conversation gets a fresh id (and so a fresh /workspace), and resuming
+  // reuses the id (same history, same workspace). For a resumed turn the id
+  // is known up front; for a new one it arrives in the `init` message, which
+  // the SDK always emits before the first tool call. The VM session is created
+  // lazily on first tool use (idempotent).
+  let sessionId: string | null = resumeSessionId ?? null;
+  let vmSession: Promise<unknown> | null = null;
+  const resolveSession = async (): Promise<string> => {
+    const id = sessionId;
+    if (!id) throw new Error("agent tool used before the SDK session was initialized");
+    if (!vmSession) vmSession = supervisor.request("create_session", { session_id: id });
+    await vmSession;
+    return id;
+  };
+
+  try {
+    const mcp = createSdkMcpServer({
+      name: "capybara",
+      tools: buildTools(supervisor, resolveSession),
+    });
     ensureBundledBunOnPath();
     const claudeBinary = resolveClaudeBinary();
     const options: Options = {
@@ -150,11 +158,22 @@ export async function runAgentTask(
       mcpServers: { capybara: mcp },
       allowedTools: ALLOWED_TOOLS,
       ...(claudeBinary ? { pathToClaudeCodeExecutable: claudeBinary } : {}),
+      ...(resumeSessionId ? { resume: resumeSessionId } : {}),
       executable: app.isPackaged ? "bun" : "node",
       abortController,
     };
 
     for await (const message of query({ prompt, options })) {
+      const init = message as { type?: string; subtype?: string; session_id?: string };
+      if (
+        init.type === "system" &&
+        init.subtype === "init" &&
+        typeof init.session_id === "string"
+      ) {
+        sessionId = init.session_id;
+        emit({ event: "session_started", taskId, sessionId: init.session_id });
+        continue;
+      }
       relay(taskId, message, emit);
     }
   } catch (error) {
@@ -164,5 +183,5 @@ export async function runAgentTask(
       text: `error: ${(error as Error).message}`,
     });
   }
-  emit({ event: "task_finished", taskId });
+  emit({ event: "task_finished", taskId, sessionId: sessionId ?? undefined });
 }
