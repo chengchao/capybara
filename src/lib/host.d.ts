@@ -6,11 +6,15 @@ declare global {
         prompt: string;
         resumeSessionId?: string;
       }) => Promise<{ taskId: string }>;
+      getSettings: () => Promise<ApiKeyState>;
+      setAnthropicApiKey: (key: string) => Promise<ApiKeyState>;
       onVmStatus: (callback: (status: VmStatus) => void) => () => void;
       onAgentEvent: (callback: (event: AgentEvent) => void) => () => void;
     };
   }
 }
+
+export type ApiKeyState = { hasApiKey: boolean; apiKeyPreview: string | null };
 
 export type VmStatus =
   | { kind: "starting" }
