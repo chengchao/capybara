@@ -3,7 +3,7 @@ import path from "node:path";
 import { createSdkMcpServer, query, type Options } from "@anthropic-ai/claude-agent-sdk";
 import { app } from "electron";
 
-import { getAnthropicApiKey } from "../settings";
+import { getAnthropicApiKey, hasStoredApiKey } from "../settings";
 import { getSupervisor } from "../vm";
 import { buildTools } from "./tools";
 
@@ -134,7 +134,9 @@ export async function runAgentTask(
     emit({
       event: "assistant_message",
       taskId,
-      text: "No Anthropic API key configured. Open Settings (⚙) and paste your ANTHROPIC_API_KEY to run the agent.",
+      text: hasStoredApiKey()
+        ? "Your saved Anthropic API key couldn't be unlocked from the system keychain. Open Settings (⚙) and re-enter it."
+        : "No Anthropic API key configured. Open Settings (⚙) and paste your ANTHROPIC_API_KEY to run the agent.",
     });
     emit({ event: "task_finished", taskId });
     return;

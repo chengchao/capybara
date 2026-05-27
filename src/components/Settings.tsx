@@ -17,7 +17,11 @@ import { getSettings, setAnthropicApiKey, type ApiKeyState } from "../lib/settin
 
 export default function Settings() {
   const [open, setOpen] = useState(false);
-  const [state, setState] = useState<ApiKeyState>({ hasApiKey: false, apiKeyPreview: null });
+  const [state, setState] = useState<ApiKeyState>({
+    hasApiKey: false,
+    apiKeyPreview: null,
+    unreadable: false,
+  });
   const [draft, setDraft] = useState("");
   const [reveal, setReveal] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -94,12 +98,18 @@ export default function Settings() {
               {reveal ? <EyeOffIcon /> : <EyeIcon />}
             </Button>
           </div>
+          {state.unreadable && !error && (
+            <p className="text-sm text-destructive">
+              A key is saved but couldn&apos;t be unlocked from your system keychain. Re-enter it
+              below, or remove it.
+            </p>
+          )}
           {error && <p className="text-sm text-destructive">{error}</p>}
           {saved && !error && <p className="text-sm text-green-600">Saved.</p>}
         </div>
 
         <DialogFooter>
-          {state.hasApiKey && (
+          {(state.hasApiKey || state.unreadable) && (
             <Button
               type="button"
               variant="ghost"

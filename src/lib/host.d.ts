@@ -14,7 +14,11 @@ declare global {
   }
 }
 
-export type ApiKeyState = { hasApiKey: boolean; apiKeyPreview: string | null };
+export type ApiKeyState = {
+  hasApiKey: boolean;
+  apiKeyPreview: string | null;
+  unreadable: boolean;
+};
 
 export type VmStatus =
   | { kind: "starting" }

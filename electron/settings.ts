@@ -22,8 +22,17 @@ function read(): Settings {
 }
 
 function write(settings: Settings): void {
-  // 0o600 is defence-in-depth on top of safeStorage's encryption.
-  fs.writeFileSync(settingsPath(), JSON.stringify(settings, null, 2), { mode: 0o600 });
+  const p = settingsPath();
+  fs.writeFileSync(p, JSON.stringify(settings, null, 2), { mode: 0o600 });
+  // writeFileSync's `mode` only applies when the file is created; on an
+  // overwrite the prior (umask, often 0o644) mode sticks, so chmod every time
+  // to keep the ciphertext owner-only as defence-in-depth on top of safeStorage.
+  fs.chmodSync(p, 0o600);
+}
+
+/** Whether a key has been saved, regardless of whether it can be decrypted now. */
+export function hasStoredApiKey(): boolean {
+  return Boolean(read().anthropicApiKeyEnc);
 }
 
 export function getAnthropicApiKey(): string | undefined {
@@ -32,8 +41,9 @@ export function getAnthropicApiKey(): string | undefined {
   try {
     return safeStorage.decryptString(Buffer.from(enc, "base64")) || undefined;
   } catch {
-    // Ciphertext that won't decrypt (e.g. copied from another machine/user)
-    // is treated as no key configured rather than a hard failure.
+    // Decrypt can fail when the keyring is locked/unavailable or the ciphertext
+    // was copied from another machine. Return undefined; callers use
+    // hasStoredApiKey() to tell "stored but unreadable" apart from "no key".
     return undefined;
   }
 }
