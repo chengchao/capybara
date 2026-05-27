@@ -6,6 +6,8 @@ const api = {
   getVmStatus: () => ipcRenderer.invoke("get-vm-status"),
   startAgentTask: (args: { prompt: string; resumeSessionId?: string }) =>
     ipcRenderer.invoke("start-agent-task", args),
+  getSettings: () => ipcRenderer.invoke("get-settings"),
+  setAnthropicApiKey: (key: string) => ipcRenderer.invoke("set-anthropic-api-key", key),
   onVmStatus: (callback: (status: unknown) => void): Unsubscribe => {
     const listener = (_event: IpcRendererEvent, status: unknown) => callback(status);
     ipcRenderer.on("vm-status", listener);
