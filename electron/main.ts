@@ -4,9 +4,23 @@ import path from "node:path";
 import { app, BrowserWindow, ipcMain } from "electron";
 
 import { runAgentTask } from "./agent/runTask";
+import { getAnthropicApiKey, hasStoredApiKey, setAnthropicApiKey } from "./settings";
 import { ensureVm, getVmStatus, setStatusEmitter, stopSupervisor, stopVm } from "./vm";
 
 const DEV_URL = process.env.VITE_DEV_SERVER_URL;
+
+type ApiKeyState = { hasApiKey: boolean; apiKeyPreview: string | null; unreadable: boolean };
+
+function describeApiKey(): ApiKeyState {
+  const key = getAnthropicApiKey();
+  if (key) {
+    const preview = key.length > 11 ? `${key.slice(0, 7)}…${key.slice(-4)}` : "•••• set";
+    return { hasApiKey: true, apiKeyPreview: preview, unreadable: false };
+  }
+  // A stored key that won't decrypt (locked/unavailable keyring, or copied from
+  // another machine) is reported as unreadable — distinct from no key at all.
+  return { hasApiKey: false, apiKeyPreview: null, unreadable: hasStoredApiKey() };
+}
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -56,6 +70,14 @@ if (!gotLock) {
   });
 
   ipcMain.handle("get-vm-status", () => getVmStatus());
+
+  ipcMain.handle("get-settings", (): ApiKeyState => describeApiKey());
+
+  ipcMain.handle("set-anthropic-api-key", (_event, key: unknown): ApiKeyState => {
+    if (typeof key !== "string") throw new Error("key must be a string");
+    setAnthropicApiKey(key.trim());
+    return describeApiKey();
+  });
 
   ipcMain.handle(
     "start-agent-task",
