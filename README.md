@@ -9,8 +9,7 @@ The app bundles three runtimes as internal resources: `limactl` (from [Lima](htt
 ```sh
 bun install
 bun run setup:runtimes      # fetches Lima + Bun (~100 MB)
-export ANTHROPIC_API_KEY=…
-bun run electron:dev
+bun run dev
 ```
 
 `setup:runtimes` reads `runtime-manifest.json`, matches the host's Rust target triple, downloads each archive, verifies sha256 (refuses install on mismatch), and extracts. Idempotent — re-runs skip when the binary already exists at the expected path. Currently supports `aarch64-apple-darwin` and `x86_64-apple-darwin`; add a triple to the manifest's `platforms` map to extend.
@@ -25,7 +24,7 @@ bun run dist
 
 Produces a signed `.dmg` (macOS) or `.exe` (Windows) under `release/`. macOS signing/notarization keys come from env vars (`CSC_LINK`, `CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`); absent keys yield an unsigned build that won't pass Gatekeeper.
 
-The build chain: `setup:runtimes` → `check:electron` → `build:electron` → `build:renderer` → `electron-builder`. The `beforePack` hook stages the per-arch Bun binary into `build/bun` for `extraResources`. The `afterPack` hook strips the SDK's `vendor/claude-code-jetbrains-plugin/` jar tree (contains unsigned `.jnilib` files that would fail macOS notarization; see [claude-agent-sdk-typescript#91](https://github.com/anthropics/claude-agent-sdk-typescript/issues/91)).
+The build chain: `setup:runtimes` → `check:electron` → `build` (`vite build`, which builds the renderer into `dist/` and — via [vite-plugin-electron](https://github.com/electron-vite/vite-plugin-electron) — the main/preload bundles into `dist-electron/`) → `electron-builder`. The `beforePack` hook stages the per-arch Bun binary into `build/bun` for `extraResources`. The `afterPack` hook strips the SDK's `vendor/claude-code-jetbrains-plugin/` jar tree (contains unsigned `.jnilib` files that would fail macOS notarization; see [claude-agent-sdk-typescript#91](https://github.com/anthropics/claude-agent-sdk-typescript/issues/91)).
 
 ## Architecture
 
