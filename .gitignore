@@ -9,8 +9,10 @@ lerna-debug.log*
 
 node_modules
 dist
+dist-electron
 dist-ssr
 release
+*.tsbuildinfo
 build/bun
 binaries/
 vendor/

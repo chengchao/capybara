@@ -6,7 +6,7 @@ import { app, BrowserWindow, ipcMain } from "electron";
 import { runAgentTask } from "./agent/runTask";
 import { ensureVm, getVmStatus, setStatusEmitter, stopSupervisor, stopVm } from "./vm";
 
-const DEV_URL = process.env.ELECTRON_DEV_URL;
+const DEV_URL = process.env.VITE_DEV_SERVER_URL;
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -16,11 +16,16 @@ if (!gotLock) {
   const activeTasks = new Map<string, AbortController>();
 
   function createMainWindow() {
+    // Anchor bundled-asset paths on app.getAppPath() (the project root in dev,
+    // app.asar when packaged) rather than __dirname, which bundlers handle
+    // inconsistently. vite-plugin-electron emits both main.cjs and preload.cjs
+    // into dist-electron/, and the renderer build lands in dist/.
+    const appPath = app.getAppPath();
     mainWindow = new BrowserWindow({
       width: 1024,
       height: 720,
       webPreferences: {
-        preload: path.join(__dirname, "preload.cjs"),
+        preload: path.join(appPath, "dist-electron", "preload.cjs"),
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: false,
@@ -33,7 +38,7 @@ if (!gotLock) {
       mainWindow.loadURL(DEV_URL);
       mainWindow.webContents.openDevTools({ mode: "detach" });
     } else {
-      mainWindow.loadFile(path.join(__dirname, "..", "..", "dist", "index.html"));
+      mainWindow.loadFile(path.join(appPath, "dist", "index.html"));
     }
   }
 

@@ -10,7 +10,7 @@
     "node_modules/@anthropic-ai/claude-agent-sdk/**",
     "node_modules/@anthropic-ai/claude-agent-sdk-*/**"
   ],
-  "files": ["electron/dist/**", "dist/**", "package.json"],
+  "files": ["dist-electron/**", "dist/**", "package.json"],
   "extraResources": [
     {
       "from": "vendor/lima",
