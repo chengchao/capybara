@@ -214,6 +214,17 @@
           <div class="file">per-turn-flow.html →</div>
         </a>
 
+        <a class="card accent-agent" href="host-agent-vm-bash.html">
+          <div class="tag">architecture <span class="badge proposed">proposed</span></div>
+          <h3>Host agent + VM bash</h3>
+          <p>
+            Split tools by risk. File ops stay on host (gated by a <code>PreToolUse</code> hook +
+            session grant store); arbitrary bash moves into the Lima VM. Agent is spawned per turn;
+            consent is agent-driven via a <code>request_capybara_directory</code> MCP.
+          </p>
+          <div class="file">host-agent-vm-bash.html →</div>
+        </a>
+
         <a class="card accent-vm" href="agent-in-vm.html">
           <div class="tag">architecture <span class="badge proposed">proposed</span></div>
           <h3>Agent-in-VM</h3>
