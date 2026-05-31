@@ -373,7 +373,7 @@
           the client. The one rule: <strong>the agent must never see it.</strong> Today the
           decrypted key is handed straight into the <code>claude</code> subprocess. This change
           inserts a <strong>loopback proxy in Electron main</strong> that holds the real key and
-          hands the subprocess only a disposable token.
+          hands the subprocess only a token (never the real key).
         </p>
 
         <div class="invariants">
@@ -389,7 +389,8 @@
           </p>
           <div class="label">Agent holds</div>
           <p class="val">
-            A <strong>random per-run token</strong> as its <code>x-api-key</code>, plus an
+            A <strong>random app-session token</strong> as its <code>x-api-key</code> (minted once
+            at startup, valid for the app process lifetime — not per turn), plus an
             <code>ANTHROPIC_BASE_URL</code> pointing at the loopback proxy.
           </p>
           <div class="label">Not in scope</div>
