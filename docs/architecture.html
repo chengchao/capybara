@@ -581,38 +581,49 @@
       </ol>
     </div>
 
-    <div class="pipe-flow" id="proposed-direction" style="margin-top: 48px; border-top: 3px solid var(--warn);">
-      <h3 style="color: var(--warn);">Proposed direction — host agent + VM bash</h3>
-      <p style="margin: 0 0 12px; color: var(--text-dim); font-size: 13px;">
-        Where we're heading. Full design: <a href="host-agent-vm-bash.html" style="color: var(--accent);">host-agent-vm-bash.html</a>.
-        Related notes: <a href="llm-proxy.html" style="color: var(--accent);">llm-proxy.html</a> (the host LLM proxy),
-        <a href="agent-in-vm.html" style="color: var(--accent);">agent-in-vm.html</a> (the heavier full-agent-in-VM alternative).
+    <div
+      class="pipe-flow"
+      id="proposed-direction"
+      style="margin-top: 48px; border-top: 3px solid var(--warn)"
+    >
+      <h3 style="color: var(--warn)">Proposed direction — host agent + VM bash</h3>
+      <p style="margin: 0 0 12px; color: var(--text-dim); font-size: 13px">
+        Where we're heading. Full design:
+        <a href="host-agent-vm-bash.html" style="color: var(--accent)">host-agent-vm-bash.html</a>.
+        Related notes: <a href="llm-proxy.html" style="color: var(--accent)">llm-proxy.html</a> (the
+        host LLM proxy),
+        <a href="agent-in-vm.html" style="color: var(--accent)">agent-in-vm.html</a> (the heavier
+        full-agent-in-VM alternative).
       </p>
       <ol>
         <li>
-          <strong>Bash off the host.</strong> The only foot-gun tool moves into the Lima VM via a custom
-          <code>workspace bash</code> MCP that forwards to the VM. Each session has a workspace dir;
-          granted host dirs are mounted in so commands can operate on the user's project.
+          <strong>Bash off the host.</strong> The only foot-gun tool moves into the Lima VM via a
+          custom <code>workspace bash</code> MCP that forwards to the VM. Each session has a
+          workspace dir; granted host dirs are mounted in so commands can operate on the user's
+          project.
         </li>
         <li>
-          <strong>Built-in file tools on host.</strong> Keep <code>Read</code>/<code>Write</code>/<code>Edit</code>/<code>Glob</code>/<code>Grep</code>
-          as SDK built-ins running in the agent process — native I/O on the user's files, no copy-through.
+          <strong>Built-in file tools on host.</strong> Keep
+          <code>Read</code>/<code>Write</code>/<code>Edit</code>/<code>Glob</code>/<code>Grep</code>
+          as SDK built-ins running in the agent process — native I/O on the user's files, no
+          copy-through.
           <code>Bash</code> is no longer in the host's allowed-tool set.
         </li>
         <li>
           <strong>Spawn the agent per turn.</strong> On each user message, Electron main spawns the
-          agent as a child process (<code>child_process.spawn</code> or <code>utilityProcess</code>),
-          pipes the message in, streams events out, and waits for exit. After the first turn,
-          subsequent spawns pass <code>--resume &lt;session_id&gt;</code> so the conversation picks up
-          where it left off. Main holds only <code>{sessionId, grants}</code> per conversation —
-          no live process to track, kill, or reap. <em>No OS sandbox</em> around the agent on the
-          host — enforcement is app-layer (see below). Deliberate KISS-defer; OS sandbox is in the
-          future-hardening list.
+          agent as a child process (<code>child_process.spawn</code> or
+          <code>utilityProcess</code>), pipes the message in, streams events out, and waits for
+          exit. After the first turn, subsequent spawns pass
+          <code>--resume &lt;session_id&gt;</code> so the conversation picks up where it left off.
+          Main holds only <code>{sessionId, grants}</code> per conversation — no live process to
+          track, kill, or reap. <em>No OS sandbox</em> around the agent on the host — enforcement is
+          app-layer (see below). Deliberate KISS-defer; OS sandbox is in the future-hardening list.
         </li>
         <li>
-          <strong>App-layer folder permissions.</strong> A <code>PreToolUse</code> hook in main gates
-          each built-in file-tool call against an in-memory session grant store. Non-granted paths
-          are denied with a structured reason that names the path and points at the consent tool.
+          <strong>App-layer folder permissions.</strong> A <code>PreToolUse</code> hook in main
+          gates each built-in file-tool call against an in-memory session grant store. Non-granted
+          paths are denied with a structured reason that names the path and points at the consent
+          tool.
         </li>
         <li>
           <strong>Agent-driven consent (deny → request → retry).</strong> On a deny, the model calls
@@ -633,26 +644,28 @@
       </ol>
     </div>
 
-    <div class="annotations" style="margin-top: 32px;">
-      <div class="note" style="border-top: 2px solid var(--good);">
-        <h3 style="color: var(--good);">What stays</h3>
+    <div class="annotations" style="margin-top: 32px">
+      <div class="note" style="border-top: 2px solid var(--good)">
+        <h3 style="color: var(--good)">What stays</h3>
         <p>
           The React renderer + Electron main control plane + the Lima VM are all kept. The agent
           still runs the Claude Agent SDK; only its <em>placement</em> changes (a spawned child of
           main, rather than running in-process inside main). The supervisor + bwrap continue to run
           inside the VM — only the entry point shifts from "run any agent command" to "run bash from
-          the workspace MCP." BYOK key custody and the encrypted-at-rest settings store are unchanged.
+          the workspace MCP." BYOK key custody and the encrypted-at-rest settings store are
+          unchanged.
         </p>
       </div>
-      <div class="note" style="border-top: 2px solid var(--warn);">
-        <h3 style="color: var(--warn);">What's deferred</h3>
+      <div class="note" style="border-top: 2px solid var(--warn)">
+        <h3 style="color: var(--warn)">What's deferred</h3>
         <p>
           Per <code>AGENTS.md</code> KISS: no <code>srt</code> around the agent on host yet — the
           grant store + <code>PreToolUse</code> hook is the load-bearing layer, and <code>srt</code>
           would be OS-level defense-in-depth for the compromised-process case. Also out of MVP: an
           <code>srt</code>-in-VM egress allowlist around bash invocations (closes the open-NAT exfil
           path), and per-session UID/bwrap isolation inside the VM. The agent-in-VM alternative is
-          tracked separately in <a href="agent-in-vm.html" style="color: var(--accent);">agent-in-vm.html</a>.
+          tracked separately in
+          <a href="agent-in-vm.html" style="color: var(--accent)">agent-in-vm.html</a>.
         </p>
       </div>
     </div>

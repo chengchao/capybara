@@ -24,143 +24,393 @@
         --sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
       }
 
-      * { box-sizing: border-box; }
-      html, body {
-        margin: 0; background: var(--bg); color: var(--text);
-        font-family: var(--sans); font-size: 15px; line-height: 1.6;
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--sans);
+        font-size: 15px;
+        line-height: 1.6;
         -webkit-font-smoothing: antialiased;
       }
-      .wrap { max-width: 1120px; margin: 0 auto; padding: 56px 24px 96px; }
-      header { margin-bottom: 40px; }
-      .eyebrow {
-        font-family: var(--mono); font-size: 12px; letter-spacing: 0.14em;
-        text-transform: uppercase; color: var(--muted); margin-bottom: 14px;
+      .wrap {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 56px 24px 96px;
       }
-      h1 { font-size: 38px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -0.02em; }
-      .lede { color: var(--muted); max-width: 74ch; margin: 0; }
-      .lede strong { color: var(--text); font-weight: 600; }
+      header {
+        margin-bottom: 40px;
+      }
+      .eyebrow {
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 14px;
+      }
+      h1 {
+        font-size: 38px;
+        line-height: 1.15;
+        margin: 0 0 14px;
+        letter-spacing: -0.02em;
+      }
+      .lede {
+        color: var(--muted);
+        max-width: 74ch;
+        margin: 0;
+      }
+      .lede strong {
+        color: var(--text);
+        font-weight: 600;
+      }
       h2 {
-        font-size: 13px; font-family: var(--mono); font-weight: 600;
-        letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
+        font-size: 13px;
+        font-family: var(--mono);
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
         margin: 56px 0 16px;
       }
-      h3 { margin: 0 0 6px; font-size: 19px; letter-spacing: -0.01em; }
-      code, .mono { font-family: var(--mono); font-size: 0.92em; }
-      p code, li code, td code, .invariants code, .panel code {
-        background: var(--panel-2); padding: 1px 6px; border-radius: 4px; font-size: 0.88em;
+      h3 {
+        margin: 0 0 6px;
+        font-size: 19px;
+        letter-spacing: -0.01em;
+      }
+      code,
+      .mono {
+        font-family: var(--mono);
+        font-size: 0.92em;
+      }
+      p code,
+      li code,
+      td code,
+      .invariants code,
+      .panel code {
+        background: var(--panel-2);
+        padding: 1px 6px;
+        border-radius: 4px;
+        font-size: 0.88em;
       }
       .pill {
-        display: inline-block; padding: 2px 9px; border-radius: 999px;
-        font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em;
-        text-transform: uppercase; font-weight: 600; vertical-align: middle; margin-left: 8px;
+        display: inline-block;
+        padding: 2px 9px;
+        border-radius: 999px;
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        font-weight: 600;
+        vertical-align: middle;
+        margin-left: 8px;
       }
-      .pill.host  { background: rgba(143,182,255,.14); color: var(--accent-host); }
-      .pill.agent { background: rgba(124,214,168,.14); color: var(--accent-agent); }
-      .pill.vm    { background: rgba(232,180,120,.14); color: var(--accent-vm); }
+      .pill.host {
+        background: rgba(143, 182, 255, 0.14);
+        color: var(--accent-host);
+      }
+      .pill.agent {
+        background: rgba(124, 214, 168, 0.14);
+        color: var(--accent-agent);
+      }
+      .pill.vm {
+        background: rgba(232, 180, 120, 0.14);
+        color: var(--accent-vm);
+      }
 
       .invariants {
-        margin-top: 28px; padding: 16px 18px; border: 1px solid var(--border);
-        background: var(--panel); border-radius: 10px; display: grid;
-        grid-template-columns: max-content 1fr; gap: 10px 18px; align-items: start;
+        margin-top: 28px;
+        padding: 16px 18px;
+        border: 1px solid var(--border);
+        background: var(--panel);
+        border-radius: 10px;
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 10px 18px;
+        align-items: start;
       }
       .invariants .label {
-        font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em;
-        text-transform: uppercase; color: var(--accent-shared); padding-top: 3px;
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--accent-shared);
+        padding-top: 3px;
       }
-      .invariants .val { margin: 0; }
-      .invariants .val strong { color: var(--text); }
+      .invariants .val {
+        margin: 0;
+      }
+      .invariants .val strong {
+        color: var(--text);
+      }
 
-      .actors { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+      .actors {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+      }
       .actor {
-        border: 1px solid var(--border); background: var(--panel);
-        border-radius: 12px; padding: 18px 18px 16px;
-        display: flex; flex-direction: column;
+        border: 1px solid var(--border);
+        background: var(--panel);
+        border-radius: 12px;
+        padding: 18px 18px 16px;
+        display: flex;
+        flex-direction: column;
       }
-      .actor.host  { border-top: 2px solid var(--accent-host); }
-      .actor.agent { border-top: 2px solid var(--accent-agent); }
-      .actor.vm    { border-top: 2px solid var(--accent-vm); }
+      .actor.host {
+        border-top: 2px solid var(--accent-host);
+      }
+      .actor.agent {
+        border-top: 2px solid var(--accent-agent);
+      }
+      .actor.vm {
+        border-top: 2px solid var(--accent-vm);
+      }
       .actor .who {
-        font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em;
-        text-transform: uppercase; color: var(--muted); margin-bottom: 8px;
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 8px;
       }
-      .actor h3 { font-size: 17px; margin: 0 0 8px; }
-      .actor p { margin: 0 0 8px; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+      .actor h3 {
+        font-size: 17px;
+        margin: 0 0 8px;
+      }
+      .actor p {
+        margin: 0 0 8px;
+        color: var(--muted);
+        font-size: 13.5px;
+        line-height: 1.5;
+      }
       .actor .life {
-        margin-top: auto; padding-top: 10px; border-top: 1px dashed var(--border);
-        font-family: var(--mono); font-size: 11.5px; color: var(--text);
+        margin-top: auto;
+        padding-top: 10px;
+        border-top: 1px dashed var(--border);
+        font-family: var(--mono);
+        font-size: 11.5px;
+        color: var(--text);
       }
-      .actor .life span { color: var(--muted); }
+      .actor .life span {
+        color: var(--muted);
+      }
 
       .diagram-wrap {
-        border: 1px solid var(--border); background: var(--panel);
-        border-radius: 12px; padding: 22px 22px 16px;
+        border: 1px solid var(--border);
+        background: var(--panel);
+        border-radius: 12px;
+        padding: 22px 22px 16px;
       }
-      .diagram-wrap p.cap { margin: 0 0 12px; color: var(--muted); font-size: 13.5px; }
+      .diagram-wrap p.cap {
+        margin: 0 0 12px;
+        color: var(--muted);
+        font-size: 13.5px;
+      }
       pre.diagram {
-        margin: 0; font-family: var(--mono); font-size: 12.5px; line-height: 1.55;
-        overflow-x: auto; color: var(--text);
+        margin: 0;
+        font-family: var(--mono);
+        font-size: 12.5px;
+        line-height: 1.55;
+        overflow-x: auto;
+        color: var(--text);
       }
-      pre.diagram .host  { color: var(--accent-host); }
-      pre.diagram .agent { color: var(--accent-agent); }
-      pre.diagram .vm    { color: var(--accent-vm); }
-      pre.diagram .arrow { color: var(--muted); }
-      pre.diagram .lab   { color: var(--muted); }
-      pre.diagram .good  { color: var(--good); }
-      pre.diagram .bad   { color: var(--bad); }
+      pre.diagram .host {
+        color: var(--accent-host);
+      }
+      pre.diagram .agent {
+        color: var(--accent-agent);
+      }
+      pre.diagram .vm {
+        color: var(--accent-vm);
+      }
+      pre.diagram .arrow {
+        color: var(--muted);
+      }
+      pre.diagram .lab {
+        color: var(--muted);
+      }
+      pre.diagram .good {
+        color: var(--good);
+      }
+      pre.diagram .bad {
+        color: var(--bad);
+      }
 
       .legend {
-        margin-top: 14px; display: flex; gap: 14px; flex-wrap: wrap;
-        font-family: var(--mono); font-size: 12px; color: var(--muted);
+        margin-top: 14px;
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--muted);
       }
-      .legend .swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+      .legend .swatch {
+        display: inline-block;
+        width: 9px;
+        height: 9px;
+        border-radius: 2px;
+        margin-right: 6px;
+        vertical-align: middle;
+      }
 
-      .turn { border: 1px solid var(--border); background: var(--panel); border-radius: 12px; padding: 4px 0; }
-      .turn ol { margin: 0; padding: 8px 28px 8px 56px; list-style: decimal; }
-      .turn ol li { padding: 12px 0; border-top: 1px dashed var(--border); }
-      .turn ol li:first-child { border-top: 0; }
-      .turn ol li .row { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
-      .turn ol li b { font-weight: 600; }
-      .turn ol li .desc { color: var(--muted); font-size: 13.5px; margin-top: 4px; }
-      .turn ol li .desc code { background: var(--panel-2); padding: 1px 6px; border-radius: 4px; font-size: 0.86em; }
+      .turn {
+        border: 1px solid var(--border);
+        background: var(--panel);
+        border-radius: 12px;
+        padding: 4px 0;
+      }
+      .turn ol {
+        margin: 0;
+        padding: 8px 28px 8px 56px;
+        list-style: decimal;
+      }
+      .turn ol li {
+        padding: 12px 0;
+        border-top: 1px dashed var(--border);
+      }
+      .turn ol li:first-child {
+        border-top: 0;
+      }
+      .turn ol li .row {
+        display: flex;
+        gap: 10px;
+        align-items: baseline;
+        flex-wrap: wrap;
+      }
+      .turn ol li b {
+        font-weight: 600;
+      }
+      .turn ol li .desc {
+        color: var(--muted);
+        font-size: 13.5px;
+        margin-top: 4px;
+      }
+      .turn ol li .desc code {
+        background: var(--panel-2);
+        padding: 1px 6px;
+        border-radius: 4px;
+        font-size: 0.86em;
+      }
 
       table {
-        width: 100%; border-collapse: collapse; font-size: 14px;
-        border: 1px solid var(--border); background: var(--panel);
-        border-radius: 12px; overflow: hidden;
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+        border: 1px solid var(--border);
+        background: var(--panel);
+        border-radius: 12px;
+        overflow: hidden;
       }
-      th, td { text-align: left; padding: 13px 16px; vertical-align: top; border-top: 1px solid var(--border); }
+      th,
+      td {
+        text-align: left;
+        padding: 13px 16px;
+        vertical-align: top;
+        border-top: 1px solid var(--border);
+      }
       thead th {
-        border-top: 0; background: var(--panel-2); font-family: var(--mono);
-        font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
-        color: var(--muted); font-weight: 600;
+        border-top: 0;
+        background: var(--panel-2);
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+        font-weight: 600;
       }
       th.dim {
-        width: 26%; color: var(--muted); font-family: var(--mono); font-size: 12px;
-        letter-spacing: 0.08em; text-transform: uppercase; font-weight: 500;
+        width: 26%;
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        font-weight: 500;
       }
-      td code { font-size: 0.86em; }
+      td code {
+        font-size: 0.86em;
+      }
 
-      .panels { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-      .panel { border: 1px solid var(--border); background: var(--panel); border-radius: 12px; padding: 18px 20px; }
-      .panel h3 { font-size: 13px; font-family: var(--mono); letter-spacing: 0.10em; text-transform: uppercase; margin: 0 0 10px; }
-      .panel.buys h3 { color: var(--good); }
-      .panel.costs h3 { color: var(--accent-vm); }
-      .panel ul { margin: 0; padding-left: 18px; }
-      .panel li { padding: 5px 0; font-size: 13.5px; color: var(--muted); }
-      .panel li strong { color: var(--text); }
+      .panels {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+      .panel {
+        border: 1px solid var(--border);
+        background: var(--panel);
+        border-radius: 12px;
+        padding: 18px 20px;
+      }
+      .panel h3 {
+        font-size: 13px;
+        font-family: var(--mono);
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        margin: 0 0 10px;
+      }
+      .panel.buys h3 {
+        color: var(--good);
+      }
+      .panel.costs h3 {
+        color: var(--accent-vm);
+      }
+      .panel ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .panel li {
+        padding: 5px 0;
+        font-size: 13.5px;
+        color: var(--muted);
+      }
+      .panel li strong {
+        color: var(--text);
+      }
 
       .note {
-        margin-top: 18px; padding: 14px 18px; border: 1px solid var(--border);
-        border-left: 2px solid var(--accent-vm); background: var(--panel);
-        border-radius: 8px; color: var(--muted); font-size: 13.5px;
+        margin-top: 18px;
+        padding: 14px 18px;
+        border: 1px solid var(--border);
+        border-left: 2px solid var(--accent-vm);
+        background: var(--panel);
+        border-radius: 8px;
+        color: var(--muted);
+        font-size: 13.5px;
       }
-      .note strong { color: var(--text); }
-      .note a, footer a { color: var(--accent-host); text-decoration: none; }
-      .note a:hover, footer a:hover { text-decoration: underline; }
+      .note strong {
+        color: var(--text);
+      }
+      .note a,
+      footer a {
+        color: var(--accent-host);
+        text-decoration: none;
+      }
+      .note a:hover,
+      footer a:hover {
+        text-decoration: underline;
+      }
 
-      footer { margin-top: 64px; padding-top: 22px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
+      footer {
+        margin-top: 64px;
+        padding-top: 22px;
+        border-top: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 13px;
+      }
 
-      @media (max-width: 900px) { .actors, .panels { grid-template-columns: 1fr 1fr; } }
+      @media (max-width: 900px) {
+        .actors,
+        .panels {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
     </style>
   </head>
   <body>
@@ -173,9 +423,9 @@
           (<code>Read</code>/<code>Write</code>/<code>Edit</code>/<code>Glob</code>/<code>Grep</code>)
           are the SDK's built-in tools running on the host. Arbitrary execution (<code>Bash</code>)
           runs in a Lima VM with the workspace + granted dirs mounted. The agent process is
-          <strong>spawned per turn</strong> (<code>--resume &lt;session_id&gt;</code> after the first)
-          and <strong>not OS-sandboxed</strong>: enforcement
-          is app-layer (a <code>PreToolUse</code> hook + grant store in main). Consent is
+          <strong>spawned per turn</strong> (<code>--resume &lt;session_id&gt;</code> after the
+          first) and <strong>not OS-sandboxed</strong>: enforcement is app-layer (a
+          <code>PreToolUse</code> hook + grant store in main). Consent is
           <strong>agent-driven</strong> — file tools fail when a path isn't connected, and the model
           calls <code>request_capybara_directory</code> to ask the user. The BYOK key never enters
           the agent process: the loopback LLM proxy injects it.
@@ -185,16 +435,16 @@
           <div class="label">Boundaries</div>
           <p class="val">
             <strong>One real boundary, one app-layer policy.</strong>
-            The <strong>Lima VM</strong> contains arbitrary execution (<code>Bash</code>).
-            App-layer (a <code>PreToolUse</code> hook in main + grant store) gates the host file tools.
-            <em>No OS sandbox around the agent on host</em> — the host-side safety is the
-            broker pattern, not the kernel.
+            The <strong>Lima VM</strong> contains arbitrary execution (<code>Bash</code>). App-layer
+            (a <code>PreToolUse</code> hook in main + grant store) gates the host file tools.
+            <em>No OS sandbox around the agent on host</em> — the host-side safety is the broker
+            pattern, not the kernel.
           </p>
           <div class="label">Key home</div>
           <p class="val">
             <strong>Electron main only</strong> (Keychain via <code>safeStorage</code>). The agent's
-            <code>claude</code> subprocess gets a per-turn token; the loopback proxy
-            swaps it for the real key.
+            <code>claude</code> subprocess gets a per-turn token; the loopback proxy swaps it for
+            the real key.
           </p>
           <div class="label">Consent flow</div>
           <p class="val">
@@ -205,7 +455,9 @@
             on approval the grant store is updated and the model retries.
           </p>
           <div class="label">Grants</div>
-          <p class="val"><strong>Session-only, in-memory in main.</strong> Gone when the conversation ends.</p>
+          <p class="val">
+            <strong>Session-only, in-memory in main.</strong> Gone when the conversation ends.
+          </p>
           <div class="label">Not in scope</div>
           <p class="val">
             No agent-in-VM. No <code>srt</code> around the agent <em>yet</em> — deferred as a future
@@ -219,42 +471,59 @@
         <div class="actor host">
           <div class="who">Electron · Node</div>
           <h3>Main = control plane</h3>
-          <p>Holds the BYOK key (Keychain). Runs the loopback LLM proxy.
-          Registers a <code>PreToolUse</code> hook + the session grant store + the
-          <code>request_capybara_directory</code> consent dialog. Spawns the agent per turn
-          (<code>--resume</code> after the first turn).</p>
+          <p>
+            Holds the BYOK key (Keychain). Runs the loopback LLM proxy. Registers a
+            <code>PreToolUse</code> hook + the session grant store + the
+            <code>request_capybara_directory</code> consent dialog. Spawns the agent per turn (<code
+              >--resume</code
+            >
+            after the first turn).
+          </p>
           <div class="life">always-on · <span>trusted root</span></div>
         </div>
         <div class="actor agent">
           <div class="who">spawned · bun · claude</div>
           <h3>Agent (host process)</h3>
-          <p>SDK driver + <code>claude</code> subprocess. Spawned per turn,
-          resumed via <code>--resume &lt;session_id&gt;</code>.
-          Holds only a per-turn token, not the real key. <strong>No OS sandbox</strong> —
-          enforcement is app-layer via main's broker.</p>
+          <p>
+            SDK driver + <code>claude</code> subprocess. Spawned per turn, resumed via
+            <code>--resume &lt;session_id&gt;</code>. Holds only a per-turn token, not the real key.
+            <strong>No OS sandbox</strong> — enforcement is app-layer via main's broker.
+          </p>
           <div class="life">per turn · <span>app-layer trust boundary</span></div>
         </div>
         <div class="actor agent">
           <div class="who">SDK built-ins</div>
           <h3>File tools</h3>
-          <p><code>Read</code> / <code>Write</code> / <code>Edit</code> / <code>Glob</code> / <code>Grep</code> —
-          run natively in the agent process. A <code>PreToolUse</code> hook in main gates each call:
-          deny with a "use <code>request_capybara_directory</code>" reason if the path isn't granted.</p>
+          <p>
+            <code>Read</code> / <code>Write</code> / <code>Edit</code> / <code>Glob</code> /
+            <code>Grep</code> — run natively in the agent process. A <code>PreToolUse</code> hook in
+            main gates each call: deny with a "use <code>request_capybara_directory</code>" reason
+            if the path isn't granted.
+          </p>
           <div class="life">native I/O (after grant) · <span>gated by PreToolUse hook</span></div>
         </div>
         <div class="actor vm">
           <div class="who">Lima · bash</div>
           <h3>Workspace bash (VM)</h3>
-          <p>Lima VM with the per-session workspace + granted dirs mounted. The custom
-          <code>workspace bash</code> MCP forwards bash invocations to the VM. Optional
-          <code>srt</code>-in-VM gives an egress allowlist.</p>
+          <p>
+            Lima VM with the per-session workspace + granted dirs mounted. The custom
+            <code>workspace bash</code> MCP forwards bash invocations to the VM. Optional
+            <code>srt</code>-in-VM gives an egress allowlist.
+          </p>
           <div class="life">arbitrary execution · <span>contained off-host</span></div>
         </div>
       </div>
 
       <h2>The shape</h2>
       <div class="diagram-wrap">
-        <p class="cap">A fresh agent process spawned per turn (resumed via <code>--resume &lt;session_id&gt;</code> after the first); one VM for the foot-gun. Granted dirs are exposed to <em>both</em> backends: the SDK built-ins (host) get them after the <code>PreToolUse</code> hook sees the grant, and the VM mounts them in for bash. Main holds only <code>{sessionId, grants}</code> per conversation — no live agent process to track between turns.</p>
+        <p class="cap">
+          A fresh agent process spawned per turn (resumed via
+          <code>--resume &lt;session_id&gt;</code> after the first); one VM for the foot-gun.
+          Granted dirs are exposed to <em>both</em> backends: the SDK built-ins (host) get them
+          after the <code>PreToolUse</code> hook sees the grant, and the VM mounts them in for bash.
+          Main holds only <code>{sessionId, grants}</code> per conversation — no live agent process
+          to track between turns.
+        </p>
         <pre class="diagram">
 <span class="lab">                                user prompt</span>
 <span class="arrow">                                     │</span>
@@ -278,25 +547,83 @@
 <span class="vm">  └─────────────────────────────────────────────────────────────────────┘</span>
 </pre>
         <div class="legend">
-          <span><span class="swatch" style="background:var(--accent-host)"></span>Electron main · trusted control plane</span>
-          <span><span class="swatch" style="background:var(--accent-agent)"></span>spawned agent process (host)</span>
-          <span><span class="swatch" style="background:var(--accent-vm)"></span>Lima VM · bash</span>
+          <span
+            ><span class="swatch" style="background: var(--accent-host)"></span>Electron main ·
+            trusted control plane</span
+          >
+          <span
+            ><span class="swatch" style="background: var(--accent-agent)"></span>spawned agent
+            process (host)</span
+          >
+          <span
+            ><span class="swatch" style="background: var(--accent-vm)"></span>Lima VM · bash</span
+          >
         </div>
       </div>
 
       <h2>What runs where</h2>
       <table>
-        <thead><tr><th class="dim">Concern</th><th>Where</th></tr></thead>
+        <thead>
+          <tr>
+            <th class="dim">Concern</th>
+            <th>Where</th>
+          </tr>
+        </thead>
         <tbody>
-          <tr><td class="dim">BYOK API key</td><td>Electron main only (Keychain via <code>safeStorage</code>); never in the agent process</td></tr>
-          <tr><td class="dim">LLM calls</td><td>Agent → loopback LLM proxy (key injection) → <code>api.anthropic.com</code></td></tr>
-          <tr><td class="dim">Agent reasoning loop</td><td>Host, spawned per turn as a child of Electron main (resumed via <code>--resume &lt;session_id&gt;</code> after the first turn). No OS sandbox.</td></tr>
-          <tr><td class="dim">File tools (R/W/Edit/Glob/Grep)</td><td>SDK built-ins running in the agent process. Each call gated by a <code>PreToolUse</code> hook in main.</td></tr>
-          <tr><td class="dim">Grant store</td><td>Electron main, in-memory, session-only</td></tr>
-          <tr><td class="dim">Consent</td><td>The <code>PreToolUse</code> hook denies with a structured reason → model calls the MCP tool <code>request_capybara_directory</code> → main shows a native dialog → on Allow, grant added</td></tr>
-          <tr><td class="dim">Arbitrary bash</td><td>Lima VM; <code>workspace bash</code> MCP forwards calls (over the existing limactl-shell stdio pattern)</td></tr>
-          <tr><td class="dim">Bash file scope</td><td>Per-session workspace + mounted granted dirs (same dirs as file tools)</td></tr>
-          <tr><td class="dim">Bash egress</td><td>Optional <code>srt</code>-in-VM with domain allowlist (recommended; otherwise the VM has open NAT)</td></tr>
+          <tr>
+            <td class="dim">BYOK API key</td>
+            <td>
+              Electron main only (Keychain via <code>safeStorage</code>); never in the agent process
+            </td>
+          </tr>
+          <tr>
+            <td class="dim">LLM calls</td>
+            <td>Agent → loopback LLM proxy (key injection) → <code>api.anthropic.com</code></td>
+          </tr>
+          <tr>
+            <td class="dim">Agent reasoning loop</td>
+            <td>
+              Host, spawned per turn as a child of Electron main (resumed via
+              <code>--resume &lt;session_id&gt;</code> after the first turn). No OS sandbox.
+            </td>
+          </tr>
+          <tr>
+            <td class="dim">File tools (R/W/Edit/Glob/Grep)</td>
+            <td>
+              SDK built-ins running in the agent process. Each call gated by a
+              <code>PreToolUse</code> hook in main.
+            </td>
+          </tr>
+          <tr>
+            <td class="dim">Grant store</td>
+            <td>Electron main, in-memory, session-only</td>
+          </tr>
+          <tr>
+            <td class="dim">Consent</td>
+            <td>
+              The <code>PreToolUse</code> hook denies with a structured reason → model calls the MCP
+              tool <code>request_capybara_directory</code> → main shows a native dialog → on Allow,
+              grant added
+            </td>
+          </tr>
+          <tr>
+            <td class="dim">Arbitrary bash</td>
+            <td>
+              Lima VM; <code>workspace bash</code> MCP forwards calls (over the existing
+              limactl-shell stdio pattern)
+            </td>
+          </tr>
+          <tr>
+            <td class="dim">Bash file scope</td>
+            <td>Per-session workspace + mounted granted dirs (same dirs as file tools)</td>
+          </tr>
+          <tr>
+            <td class="dim">Bash egress</td>
+            <td>
+              Optional <code>srt</code>-in-VM with domain allowlist (recommended; otherwise the VM
+              has open NAT)
+            </td>
+          </tr>
         </tbody>
       </table>
 
@@ -305,38 +632,76 @@
         <ol>
           <li>
             <div class="row"><b>UI → host → spawn</b> <span class="pill host">host</span></div>
-            <div class="desc">Renderer → <code>start-agent-task(prompt)</code>. Main spawns a fresh agent process for this turn — first turn of a new conversation, so no <code>--resume</code>; the conversation's grant store starts empty.</div>
+            <div class="desc">
+              Renderer → <code>start-agent-task(prompt)</code>. Main spawns a fresh agent process
+              for this turn — first turn of a new conversation, so no <code>--resume</code>; the
+              conversation's grant store starts empty.
+            </div>
           </li>
           <li>
-            <div class="row"><b>Agent tries Glob on ~/Desktop</b> <span class="pill agent">agent</span></div>
-            <div class="desc">LLM (via the proxy) decides → calls the built-in <code>Glob({ pattern: "*.png", path: "~/Desktop" })</code>.</div>
+            <div class="row">
+              <b>Agent tries Glob on ~/Desktop</b> <span class="pill agent">agent</span>
+            </div>
+            <div class="desc">
+              LLM (via the proxy) decides → calls the built-in
+              <code>Glob({ pattern: "*.png", path: "~/Desktop" })</code>.
+            </div>
           </li>
           <li>
             <div class="row"><b>PreToolUse hook denies</b> <span class="pill host">host</span></div>
-            <div class="desc">SDK fires the <code>PreToolUse</code> hook in main. The grant store has nothing → the hook returns
-              <code>{ permissionDecision: "deny", permissionDecisionReason: "Path \"~/Desktop\" is not connected. Call request_capybara_directory({ path: \"~/Desktop\", mode: \"read\" }) to request access, then retry." }</code>.
-              The model sees the reason as the tool result. <em>No UI appears at this step.</em></div>
+            <div class="desc">
+              SDK fires the <code>PreToolUse</code> hook in main. The grant store has nothing → the
+              hook returns
+              <code
+                >{ permissionDecision: "deny", permissionDecisionReason: "Path \"~/Desktop\" is not
+                connected. Call request_capybara_directory({ path: \"~/Desktop\", mode: \"read\" })
+                to request access, then retry." }</code
+              >. The model sees the reason as the tool result. <em>No UI appears at this step.</em>
+            </div>
           </li>
           <li>
-            <div class="row"><b>Agent requests access</b> <span class="pill agent">agent</span></div>
-            <div class="desc">Per the deny hint, the model calls the MCP tool
-              <code>request_capybara_directory({ path: "~/Desktop", mode: "read" })</code>. Often the model also
-              explains in conversation: <em>"I'll request read access to your Desktop so I can list the images."</em></div>
+            <div class="row">
+              <b>Agent requests access</b> <span class="pill agent">agent</span>
+            </div>
+            <div class="desc">
+              Per the deny hint, the model calls the MCP tool
+              <code>request_capybara_directory({ path: "~/Desktop", mode: "read" })</code>. Often
+              the model also explains in conversation:
+              <em>"I'll request read access to your Desktop so I can list the images."</em>
+            </div>
           </li>
           <li>
-            <div class="row"><b>Consent dialog on the host</b> <span class="pill host">host</span></div>
-            <div class="desc">The MCP handler in the agent forwards to main; main shows a native dialog
-              (<em>"Capybara wants to read ~/Desktop — Allow / Deny."</em>). On <em>Allow</em>: main adds the path
-              + mode to the in-memory grant store. The MCP tool returns <code>granted</code>.</div>
+            <div class="row">
+              <b>Consent dialog on the host</b> <span class="pill host">host</span>
+            </div>
+            <div class="desc">
+              The MCP handler in the agent forwards to main; main shows a native dialog (<em
+                >"Capybara wants to read ~/Desktop — Allow / Deny."</em
+              >). On <em>Allow</em>: main adds the path + mode to the in-memory grant store. The MCP
+              tool returns <code>granted</code>.
+            </div>
           </li>
           <li>
-            <div class="row"><b>Retry Glob — now allowed</b> <span class="pill agent">agent</span><span class="pill host">host</span></div>
-            <div class="desc">Model retries <code>Glob({ pattern: "*.png", path: "~/Desktop" })</code>. The <code>PreToolUse</code> hook sees the grant → returns <code>{ permissionDecision: "allow" }</code>. SDK built-in <code>Glob</code> runs natively in the agent process and enumerates the directory.</div>
+            <div class="row">
+              <b>Retry Glob — now allowed</b> <span class="pill agent">agent</span
+              ><span class="pill host">host</span>
+            </div>
+            <div class="desc">
+              Model retries <code>Glob({ pattern: "*.png", path: "~/Desktop" })</code>. The
+              <code>PreToolUse</code> hook sees the grant → returns
+              <code>{ permissionDecision: "allow" }</code>. SDK built-in <code>Glob</code> runs
+              natively in the agent process and enumerates the directory.
+            </div>
           </li>
           <li>
-            <div class="row"><b>Stream the answer</b> <span class="pill agent">agent</span><span class="pill host">host</span></div>
-            <div class="desc">Agent formats the list → <code>assistant_message</code> → bridged to the renderer.
-              No bash, no VM hop — pure host file tools.</div>
+            <div class="row">
+              <b>Stream the answer</b> <span class="pill agent">agent</span
+              ><span class="pill host">host</span>
+            </div>
+            <div class="desc">
+              Agent formats the list → <code>assistant_message</code> → bridged to the renderer. No
+              bash, no VM hop — pure host file tools.
+            </div>
           </li>
         </ol>
       </div>
@@ -346,22 +711,64 @@
         <div class="panel buys">
           <h3>What it buys</h3>
           <ul>
-            <li><strong>The foot-gun is off the host.</strong> <code>Bash</code> (arbitrary execution) is contained in the VM; the host carries only bounded file ops.</li>
-            <li><strong>Agent-driven consent.</strong> The model explains <em>why</em> it needs access in its conversation before the user sees a prompt — clearer intent than a dialog popping out of nowhere.</li>
-            <li><strong>One consent surface.</strong> All grants flow through one MCP tool, with one dialog shape, owned by main. The <code>PreToolUse</code> hook is purely a gate, never a UI.</li>
-            <li><strong>Native I/O after grant.</strong> Built-in tools run directly on the user's files — no copy-through, no mount tax, no reimplementation of <code>Read</code>/<code>Edit</code>/<code>Grep</code>.</li>
-            <li><strong>Much lighter than agent-in-VM.</strong> No Linux <code>claude</code> binary, no in-VM SDK, no host↔VM control channel for the agent. VM is purely a bash runner.</li>
-            <li><strong>Key out of the agent process.</strong> Loopback proxy + per-turn token (dies with the process); a compromised subprocess holds nothing reusable.</li>
+            <li>
+              <strong>The foot-gun is off the host.</strong> <code>Bash</code> (arbitrary execution)
+              is contained in the VM; the host carries only bounded file ops.
+            </li>
+            <li>
+              <strong>Agent-driven consent.</strong> The model explains <em>why</em> it needs access
+              in its conversation before the user sees a prompt — clearer intent than a dialog
+              popping out of nowhere.
+            </li>
+            <li>
+              <strong>One consent surface.</strong> All grants flow through one MCP tool, with one
+              dialog shape, owned by main. The <code>PreToolUse</code> hook is purely a gate, never
+              a UI.
+            </li>
+            <li>
+              <strong>Native I/O after grant.</strong> Built-in tools run directly on the user's
+              files — no copy-through, no mount tax, no reimplementation of
+              <code>Read</code>/<code>Edit</code>/<code>Grep</code>.
+            </li>
+            <li>
+              <strong>Much lighter than agent-in-VM.</strong> No Linux <code>claude</code> binary,
+              no in-VM SDK, no host↔VM control channel for the agent. VM is purely a bash runner.
+            </li>
+            <li>
+              <strong>Key out of the agent process.</strong> Loopback proxy + per-turn token (dies
+              with the process); a compromised subprocess holds nothing reusable.
+            </li>
           </ul>
         </div>
         <div class="panel costs">
           <h3>Honest costs</h3>
           <ul>
-            <li><strong>App-layer enforcement on the host.</strong> The grant store + the <code>PreToolUse</code> hook gate <em>tool calls</em>. They do not stop a compromised agent process from calling <code>fs.readFile</code> directly, opening a raw socket, or spawning a shell. The host-side safety rests on "no malicious code runs in the agent process." See the note at the end for the future <code>srt</code> hardening pass.</li>
-            <li><strong>Two-step UX on first access to a new dir.</strong> Deny → request → retry costs an extra round-trip. Acceptable per conversation; would matter more for high-frequency new-dir access.</li>
-            <li><strong>Granted dirs are exposed to bash too.</strong> Bash in the VM can rewrite/delete files inside granted dirs (same exposure as file tools). The VM protects the rest of the host, not the granted dirs from bash.</li>
-            <li><strong>Session-only grants by design.</strong> Each new conversation starts empty — the user re-grants as the agent re-asks. Good for least-privilege; some users will find it repetitive.</li>
-            <li><strong>Cross-platform is uneven.</strong> macOS / Linux are natural; Windows desktop would need WSL or a redesign for bash.</li>
+            <li>
+              <strong>App-layer enforcement on the host.</strong> The grant store + the
+              <code>PreToolUse</code> hook gate <em>tool calls</em>. They do not stop a compromised
+              agent process from calling <code>fs.readFile</code> directly, opening a raw socket, or
+              spawning a shell. The host-side safety rests on "no malicious code runs in the agent
+              process." See the note at the end for the future <code>srt</code> hardening pass.
+            </li>
+            <li>
+              <strong>Two-step UX on first access to a new dir.</strong> Deny → request → retry
+              costs an extra round-trip. Acceptable per conversation; would matter more for
+              high-frequency new-dir access.
+            </li>
+            <li>
+              <strong>Granted dirs are exposed to bash too.</strong> Bash in the VM can
+              rewrite/delete files inside granted dirs (same exposure as file tools). The VM
+              protects the rest of the host, not the granted dirs from bash.
+            </li>
+            <li>
+              <strong>Session-only grants by design.</strong> Each new conversation starts empty —
+              the user re-grants as the agent re-asks. Good for least-privilege; some users will
+              find it repetitive.
+            </li>
+            <li>
+              <strong>Cross-platform is uneven.</strong> macOS / Linux are natural; Windows desktop
+              would need WSL or a redesign for bash.
+            </li>
           </ul>
         </div>
       </div>
@@ -369,31 +776,88 @@
       <h2>Where this sits among the alternatives</h2>
       <table>
         <thead>
-          <tr><th class="dim">Concern</th><th>Claude Code (host + host bash, agent under srt)</th><th><strong>This (host agent, no srt, VM bash)</strong></th><th>Agent-in-VM (Cowork)</th></tr>
+          <tr>
+            <th class="dim">Concern</th>
+            <th>Claude Code (host + host bash, agent under srt)</th>
+            <th><strong>This (host agent, no srt, VM bash)</strong></th>
+            <th>Agent-in-VM (Cowork)</th>
+          </tr>
         </thead>
         <tbody>
-          <tr><td class="dim">Bash location</td><td>Host (under <code>srt</code>)</td><td><strong>VM</strong></td><td>VM</td></tr>
-          <tr><td class="dim">Agent location</td><td>Host (under <code>srt</code>)</td><td><strong>Host (no OS sandbox)</strong></td><td>VM</td></tr>
-          <tr><td class="dim">Boundary for bash</td><td>Seatbelt (same-kernel)</td><td><strong>hypervisor (VM)</strong></td><td>hypervisor (VM)</td></tr>
-          <tr><td class="dim">Boundary for the agent</td><td>Seatbelt (same-kernel)</td><td><strong>app-layer only</strong></td><td>hypervisor (VM)</td></tr>
-          <tr><td class="dim">File access UX</td><td>native</td><td><strong>native (after grant)</strong></td><td>via mount or brokered MCP</td></tr>
-          <tr><td class="dim">Consent UX</td><td>SDK-driven prompt</td><td><strong>agent-driven: deny → request → retry</strong></td><td>per-directory dialog at mount time</td></tr>
-          <tr><td class="dim">Footprint</td><td>lightest</td><td><strong>medium (VM for bash)</strong></td><td>heaviest (full agent-in-VM)</td></tr>
-          <tr><td class="dim">Threat-model fit</td><td>developer-CLI</td><td><strong>trust the agent process</strong></td><td>unattended desktop agent</td></tr>
+          <tr>
+            <td class="dim">Bash location</td>
+            <td>Host (under <code>srt</code>)</td>
+            <td><strong>VM</strong></td>
+            <td>VM</td>
+          </tr>
+          <tr>
+            <td class="dim">Agent location</td>
+            <td>Host (under <code>srt</code>)</td>
+            <td><strong>Host (no OS sandbox)</strong></td>
+            <td>VM</td>
+          </tr>
+          <tr>
+            <td class="dim">Boundary for bash</td>
+            <td>Seatbelt (same-kernel)</td>
+            <td><strong>hypervisor (VM)</strong></td>
+            <td>hypervisor (VM)</td>
+          </tr>
+          <tr>
+            <td class="dim">Boundary for the agent</td>
+            <td>Seatbelt (same-kernel)</td>
+            <td><strong>app-layer only</strong></td>
+            <td>hypervisor (VM)</td>
+          </tr>
+          <tr>
+            <td class="dim">File access UX</td>
+            <td>native</td>
+            <td><strong>native (after grant)</strong></td>
+            <td>via mount or brokered MCP</td>
+          </tr>
+          <tr>
+            <td class="dim">Consent UX</td>
+            <td>SDK-driven prompt</td>
+            <td><strong>agent-driven: deny → request → retry</strong></td>
+            <td>per-directory dialog at mount time</td>
+          </tr>
+          <tr>
+            <td class="dim">Footprint</td>
+            <td>lightest</td>
+            <td><strong>medium (VM for bash)</strong></td>
+            <td>heaviest (full agent-in-VM)</td>
+          </tr>
+          <tr>
+            <td class="dim">Threat-model fit</td>
+            <td>developer-CLI</td>
+            <td><strong>trust the agent process</strong></td>
+            <td>unattended desktop agent</td>
+          </tr>
         </tbody>
       </table>
 
       <div class="note">
         <strong>Future hardening (out of MVP).</strong>
-        Three things to revisit once the broker/grant flow is solid:
-        (1) <em>Bash egress in the VM</em>: <code>srt</code> inside the VM around each bash invocation with a domain allowlist, otherwise the VM has open NAT and a clean exfil path.
-        (2) <em>Per-session isolation in the VM</em>: per-session workspace dirs + per-session UIDs (or in-VM <code>srt</code>) so concurrent sessions can't see each other's bash state.
-        (3) <em>Optional <code>srt</code> around the agent on host</em>: an OS-level backstop for the compromised-process case (malicious dep, SDK exploit, etc.). Would require a staging strategy (or accept respawn-on-grant) because <code>srt</code>/bwrap policy is static at launch and our grants are dynamic. KISS-defer until the threat is concrete; the broker pattern is the load-bearing layer, <code>srt</code> would be defense-in-depth.
-        See <a href="agent-in-vm.html">agent-in-vm.html</a> and <a href="llm-proxy.html">llm-proxy.html</a> for the heavier alternatives this builds against.
+        Three things to revisit once the broker/grant flow is solid: (1)
+        <em>Bash egress in the VM</em>: <code>srt</code> inside the VM around each bash invocation
+        with a domain allowlist, otherwise the VM has open NAT and a clean exfil path. (2)
+        <em>Per-session isolation in the VM</em>: per-session workspace dirs + per-session UIDs (or
+        in-VM <code>srt</code>) so concurrent sessions can't see each other's bash state. (3)
+        <em>Optional <code>srt</code> around the agent on host</em>: an OS-level backstop for the
+        compromised-process case (malicious dep, SDK exploit, etc.). Would require a staging
+        strategy (or accept respawn-on-grant) because <code>srt</code>/bwrap policy is static at
+        launch and our grants are dynamic. KISS-defer until the threat is concrete; the broker
+        pattern is the load-bearing layer, <code>srt</code> would be defense-in-depth. See
+        <a href="agent-in-vm.html">agent-in-vm.html</a> and
+        <a href="llm-proxy.html">llm-proxy.html</a> for the heavier alternatives this builds
+        against.
       </div>
 
       <footer>
-        Architecture variant — sits between Claude Code (Bash on host) and Cowork (full agent-in-VM). The host carries only declarative, bounded file tools gated app-layer by a <code>PreToolUse</code> hook; arbitrary execution lives in the VM; consent is agent-driven via <code>request_capybara_directory</code>. No OS sandbox on the host side — broker and grants are the boundary.
+        Architecture variant — sits between Claude Code (Bash on host) and Cowork (full
+        agent-in-VM). The host carries only declarative, bounded file tools gated app-layer by a
+        <code>PreToolUse</code> hook; arbitrary execution lives in the VM; consent is agent-driven
+        via <code>request_capybara_directory</code>. No OS sandbox on the host side — broker and
+        grants are the boundary.
       </footer>
     </div>
   </body>
