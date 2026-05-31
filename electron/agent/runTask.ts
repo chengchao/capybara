@@ -3,6 +3,7 @@ import path from "node:path";
 import { createSdkMcpServer, query, type Options } from "@anthropic-ai/claude-agent-sdk";
 import { app } from "electron";
 
+import { getLlmProxy } from "../llmProxy";
 import { getAnthropicApiKey, hasStoredApiKey } from "../settings";
 import { getSupervisor } from "../vm";
 import { buildTools } from "./tools";
@@ -166,6 +167,11 @@ export async function runAgentTask(
     });
     ensureBundledBunOnPath();
     const claudeBinary = resolveClaudeBinary();
+    // The real key never enters the subprocess env: it gets the loopback
+    // proxy's disposable token + base URL, and the proxy (in main) swaps the
+    // token for the real key on the way to Anthropic. `apiKey` above is only
+    // used for the pre-flight no-key/unreadable guard.
+    const proxy = getLlmProxy();
     const options: Options = {
       model: MODEL,
       systemPrompt: SYSTEM_PROMPT,
@@ -174,7 +180,7 @@ export async function runAgentTask(
       ...(claudeBinary ? { pathToClaudeCodeExecutable: claudeBinary } : {}),
       ...(resumeSessionId ? { resume: resumeSessionId } : {}),
       executable: app.isPackaged ? "bun" : "node",
-      env: { ...process.env, ANTHROPIC_API_KEY: apiKey },
+      env: { ...process.env, ANTHROPIC_API_KEY: proxy.token, ANTHROPIC_BASE_URL: proxy.baseUrl },
       abortController,
     };
 

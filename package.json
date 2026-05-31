@@ -8,6 +8,7 @@
     "setup:runtimes": "bun run ./scripts/fetch-runtimes.ts",
     "check:electron": "tsc --noEmit -p electron",
     "check:renderer": "tsc --noEmit",
+    "test": "bun test electron",
     "lint": "oxlint -D correctness",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
