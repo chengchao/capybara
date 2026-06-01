@@ -4,6 +4,7 @@ import path from "node:path";
 import { app, BrowserWindow, ipcMain } from "electron";
 
 import { runAgentTask } from "./agent/runTask";
+import { startLlmProxy, stopLlmProxy } from "./llmProxy";
 import { getAnthropicApiKey, hasStoredApiKey, setAnthropicApiKey } from "./settings";
 import { ensureVm, getVmStatus, setStatusEmitter, stopSupervisor, stopVm } from "./vm";
 
@@ -105,7 +106,19 @@ if (!gotLock) {
     },
   );
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
+    // Start the loopback LLM proxy before anything can launch an agent task,
+    // so runTask always finds it via getLlmProxy(). Binding a localhost port is
+    // near-instant; the VM (which the agent needs anyway) takes far longer. A
+    // bind failure must not leave a windowless, silent app — log it and still
+    // show the window; a later task surfaces the failure via getLlmProxy().
+    try {
+      await startLlmProxy({
+        getApiKey: () => getAnthropicApiKey() ?? process.env.ANTHROPIC_API_KEY,
+      });
+    } catch (e) {
+      process.stderr.write(`llm proxy: failed to start: ${(e as Error).message}\n`);
+    }
     createMainWindow();
     ensureVm().catch((e) => {
       process.stderr.write(`vm: ensure_vm failed: ${(e as Error).message}\n`);
@@ -128,6 +141,7 @@ if (!gotLock) {
     event.preventDefault();
     try {
       for (const controller of activeTasks.values()) controller.abort();
+      await stopLlmProxy();
       await stopSupervisor();
       await Promise.race([stopVm(), new Promise((resolve) => setTimeout(resolve, 10_000))]);
     } catch (e) {

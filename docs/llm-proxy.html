@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Capybara — LLM control-plane proxy (planned)</title>
+    <style>
+      :root {
+        --bg: #0f1115;
+        --panel: #161922;
+        --panel-2: #1c2030;
+        --border: #262b3a;
+        --text: #e6e8ee;
+        --muted: #9aa1b2;
+        --accent-host: #8fb6ff; /* Electron main — trusted, holds the key + proxy */
+        --accent-agent: #7cd6a8; /* the claude subprocess — untrusted agent */
+        --accent-vm: #e8b478; /* Anthropic API */
+        --accent-ui: #d792e6;
+        --accent-shared: #c9b46b;
+        --good: #7cd6a8;
+        --warn: #e8c987;
+        --bad: #e88a8a;
+        --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--sans);
+        font-size: 15px;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+      }
+      .wrap {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 56px 24px 96px;
+      }
+      header {
+        margin-bottom: 40px;
+      }
+      .eyebrow {
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 14px;
+      }
+      h1 {
+        font-size: 38px;
+        line-height: 1.15;
+        margin: 0 0 14px;
+        letter-spacing: -0.02em;
+      }
+      .lede {
+        color: var(--muted);
+        max-width: 74ch;
+        margin: 0;
+      }
+      .lede strong {
+        color: var(--text);
+        font-weight: 600;
+      }
+      h2 {
+        font-size: 13px;
+        font-family: var(--mono);
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 56px 0 16px;
+      }
+      h3 {
+        margin: 0 0 6px;
+        font-size: 19px;
+        letter-spacing: -0.01em;
+      }
+      code,
+      .mono {
+        font-family: var(--mono);
+        font-size: 0.92em;
+      }
+      p code,
+      li code,
+      td code,
+      .invariants code,
+      .panel code {
+        background: var(--panel-2);
+        padding: 1px 6px;
+        border-radius: 4px;
+        font-size: 0.88em;
+      }
+      .pill {
+        display: inline-block;
+        padding: 2px 9px;
+        border-radius: 999px;
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        font-weight: 600;
+        vertical-align: middle;
+        margin-left: 8px;
+      }
+      .pill.host {
+        background: rgba(143, 182, 255, 0.14);
+        color: var(--accent-host);
+      }
+      .pill.agent {
+        background: rgba(124, 214, 168, 0.14);
+        color: var(--accent-agent);
+      }
+      .pill.new {
+        background: rgba(124, 214, 168, 0.16);
+        color: var(--good);
+      }
+      .pill.edit {
+        background: rgba(232, 201, 135, 0.16);
+        color: var(--warn);
+      }
+
+      .invariants {
+        margin-top: 28px;
+        padding: 16px 18px;
+        border: 1px solid var(--border);
+        background: var(--panel);
+        border-radius: 10px;
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 10px 18px;
+        align-items: start;
+      }
+      .invariants .label {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--accent-shared);
+        padding-top: 3px;
+      }
+      .invariants .val {
+        margin: 0;
+      }
+      .invariants .val strong {
+        color: var(--text);
+      }
+
+      .diagram-wrap {
+        border: 1px solid var(--border);
+        background: var(--panel);
+        border-radius: 12px;
+        padding: 22px 22px 16px;
+      }
+      .diagram-wrap p.cap {
+        margin: 0 0 12px;
+        color: var(--muted);
+        font-size: 13.5px;
+      }
+      pre.diagram {
+        margin: 0;
+        font-family: var(--mono);
+        font-size: 12.5px;
+        line-height: 1.55;
+        overflow-x: auto;
+        color: var(--text);
+      }
+      pre.diagram .host {
+        color: var(--accent-host);
+      }
+      pre.diagram .agent {
+        color: var(--accent-agent);
+      }
+      pre.diagram .vm {
+        color: var(--accent-vm);
+      }
+      pre.diagram .arrow {
+        color: var(--muted);
+      }
+      pre.diagram .lab {
+        color: var(--muted);
+      }
+      pre.diagram .bad {
+        color: var(--bad);
+      }
+      pre.diagram .good {
+        color: var(--good);
+      }
+
+      .ba {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+      .ba .col {
+        border: 1px solid var(--border);
+        background: var(--panel);
+        border-radius: 12px;
+        padding: 18px 20px;
+      }
+      .ba h3 {
+        font-size: 13px;
+        font-family: var(--mono);
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        margin: 0 0 4px;
+      }
+      .ba .sub {
+        color: var(--muted);
+        font-size: 12.5px;
+        margin: 0 0 12px;
+      }
+      .ba .before h3 {
+        color: var(--bad);
+      }
+      .ba .after h3 {
+        color: var(--good);
+      }
+      .ba ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .ba li {
+        padding: 5px 0;
+        font-size: 13.5px;
+        color: var(--text);
+      }
+      .ba li span {
+        color: var(--muted);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+        border: 1px solid var(--border);
+        background: var(--panel);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 13px 16px;
+        vertical-align: top;
+        border-top: 1px solid var(--border);
+      }
+      thead th {
+        border-top: 0;
+        background: var(--panel-2);
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+        font-weight: 600;
+      }
+      td code {
+        font-size: 0.86em;
+      }
+      td.file {
+        white-space: nowrap;
+      }
+
+      .panels {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+      .panel {
+        border: 1px solid var(--border);
+        background: var(--panel);
+        border-radius: 12px;
+        padding: 18px 20px;
+      }
+      .panel h3 {
+        font-size: 13px;
+        font-family: var(--mono);
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        margin: 0 0 10px;
+      }
+      .panel.buys h3 {
+        color: var(--good);
+      }
+      .panel.scope h3 {
+        color: var(--accent-vm);
+      }
+      .panel ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .panel li {
+        padding: 5px 0;
+        font-size: 13.5px;
+        color: var(--muted);
+      }
+      .panel li strong {
+        color: var(--text);
+      }
+
+      .note {
+        margin-top: 18px;
+        padding: 14px 18px;
+        border: 1px solid var(--border);
+        border-left: 2px solid var(--accent-vm);
+        background: var(--panel);
+        border-radius: 8px;
+        color: var(--muted);
+        font-size: 13.5px;
+      }
+      .note strong {
+        color: var(--text);
+      }
+      .note a,
+      footer a {
+        color: var(--accent-host);
+        text-decoration: none;
+      }
+      .note a:hover,
+      footer a:hover {
+        text-decoration: underline;
+      }
+
+      .legend {
+        margin-top: 14px;
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .legend .swatch {
+        display: inline-block;
+        width: 9px;
+        height: 9px;
+        border-radius: 2px;
+        margin-right: 6px;
+        vertical-align: middle;
+      }
+
+      footer {
+        margin-top: 64px;
+        padding-top: 22px;
+        border-top: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      @media (max-width: 900px) {
+        .ba,
+        .panels {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div class="eyebrow">Capybara · LLM control-plane proxy · planned</div>
+        <h1>Keep the BYOK key out of the agent</h1>
+        <p class="lede">
+          With <strong>BYOK</strong> the Anthropic key is the user's own, stored encrypted on their
+          machine (Keychain via <code>safeStorage</code>, #30) — so it's fine for the key to live on
+          the client. The one rule: <strong>the agent must never see it.</strong> Today the
+          decrypted key is handed straight into the <code>claude</code> subprocess. This change
+          inserts a <strong>loopback proxy in Electron main</strong> that holds the real key and
+          hands the subprocess only a token (never the real key).
+        </p>
+
+        <div class="invariants">
+          <div class="label">Boundary</div>
+          <p class="val">
+            <strong>Trusted host vs. untrusted agent</strong> — on the same machine. Not client vs.
+            server. The key stays on the client; it just stays out of the agent.
+          </p>
+          <div class="label">Key home</div>
+          <p class="val">
+            <strong>Electron main only.</strong> Decrypted from <code>safeStorage</code> at request
+            time, held by the proxy, never written to the agent's env.
+          </p>
+          <div class="label">Agent holds</div>
+          <p class="val">
+            A <strong>random app-session token</strong> as its <code>x-api-key</code> (minted once
+            at startup, valid for the app process lifetime — not per turn), plus an
+            <code>ANTHROPIC_BASE_URL</code> pointing at the loopback proxy.
+          </p>
+          <div class="label">Not in scope</div>
+          <p class="val">
+            No remote backend, no key custody service, no VM-egress lockdown, no moving the agent
+            into the VM — those are separate follow-ups.
+          </p>
+        </div>
+      </header>
+
+      <h2>Before → after (the key's path)</h2>
+      <div class="ba">
+        <div class="col before">
+          <h3>Today (#30)</h3>
+          <p class="sub">
+            The decrypted BYOK key is injected straight into the agent's subprocess.
+          </p>
+          <ul>
+            <li>main decrypts the key <span>(safeStorage)</span></li>
+            <li>
+              <code>env: { …, ANTHROPIC_API_KEY: realKey }</code>
+              <span>→ the <code>claude</code> subprocess</span>
+            </li>
+            <li>subprocess calls <code>api.anthropic.com</code> directly</li>
+            <li>
+              <strong>the subprocess holds the real key</strong>
+              <span>— a compromised binary/dep leaks it</span>
+            </li>
+          </ul>
+        </div>
+        <div class="col after">
+          <h3>After (proxy)</h3>
+          <p class="sub">The key never leaves main; the agent gets a token.</p>
+          <ul>
+            <li>main decrypts the key <span>(unchanged)</span></li>
+            <li><code>env: { …, ANTHROPIC_API_KEY: token, ANTHROPIC_BASE_URL: loopback }</code></li>
+            <li>subprocess → loopback proxy → <code>api.anthropic.com</code></li>
+            <li>
+              <strong>proxy swaps token → real key</strong>
+              <span>— subprocess holds only a token</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <h2>The shape</h2>
+      <div class="diagram-wrap">
+        <p class="cap">
+          One process, one boundary: the real key lives only in Electron main (blue). The agent
+          subprocess (green) is handed a token and a loopback URL; the proxy is the single,
+          Anthropic-only exit.
+        </p>
+        <pre class="diagram">
+<span class="host">  ┌─ Electron main · TRUSTED · decrypts BYOK key (safeStorage) ─────┐</span>
+<span class="host">  │</span>                                                                 <span class="host">│</span>
+<span class="host">  │</span>   <span class="host">loopback proxy</span>  127.0.0.1:&lt;port&gt;                              <span class="host">│</span>
+<span class="host">  │</span>     <span class="lab">x-api-key == token ?</span>  <span class="good">→ swap in real key →</span>  forward/stream  <span class="host">│</span> <span class="arrow">──►</span> <span class="vm">api.anthropic.com</span>
+<span class="host">  │</span>          <span class="arrow">▲</span>                                                      <span class="host">│</span>
+<span class="host">  │</span>          <span class="arrow">│</span> <span class="lab">ANTHROPIC_BASE_URL + token (x-api-key)</span>                  <span class="host">│</span>
+<span class="host">  │</span>   <span class="agent">┌──────┴───────────────────────────────────────────────┐</span>      <span class="host">│</span>
+<span class="host">  │</span>   <span class="agent">│ claude subprocess · UNTRUSTED agent · holds only a TOKEN│</span>     <span class="host">│</span>
+<span class="host">  │</span>   <span class="agent">│ tools: Bash / Read / Glob  ──►  VM supervisor (no key)  │</span>     <span class="host">│</span>
+<span class="host">  │</span>   <span class="agent">└─────────────────────────────────────────────────────────┘</span>    <span class="host">│</span>
+<span class="host">  └─────────────────────────────────────────────────────────────────┘</span>
+<span class="lab">   real ANTHROPIC_API_KEY: exists only inside Electron main ─ never in the subprocess env</span>
+</pre>
+        <div class="legend">
+          <span
+            ><span class="swatch" style="background: var(--accent-host)"></span>Electron main /
+            proxy (trusted, holds key)</span
+          >
+          <span
+            ><span class="swatch" style="background: var(--accent-agent)"></span>claude subprocess
+            (untrusted, token only)</span
+          >
+          <span
+            ><span class="swatch" style="background: var(--accent-vm)"></span>Anthropic API</span
+          >
+        </div>
+      </div>
+
+      <h2>Files</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>File</th>
+            <th></th>
+            <th>Change</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="file"><code>electron/llmProxy.ts</code></td>
+            <td><span class="pill new">new</span></td>
+            <td>
+              Pure-Node loopback proxy (no <code>electron</code> import → unit-testable).
+              <code>createLlmProxy({ getApiKey, upstreamOrigin })</code> →
+              <code>{ baseUrl, token, stop() }</code>. Validates <code>x-api-key === token</code>,
+              swaps in the real key, drops hop-by-hop/<code>authorization</code> headers, pipes the
+              response (SSE streams for free). Single fixed upstream = Anthropic-only.
+            </td>
+          </tr>
+          <tr>
+            <td class="file"><code>electron/main.ts</code></td>
+            <td><span class="pill edit">edit</span></td>
+            <td>
+              Start the proxy once on ready with
+              <code>getApiKey: () =&gt; getAnthropicApiKey() ?? process.env.ANTHROPIC_API_KEY</code
+              >; stop it on <code>before-quit</code>. Lazy singleton, like
+              <code>getSupervisor()</code>.
+            </td>
+          </tr>
+          <tr>
+            <td class="file"><code>electron/agent/runTask.ts</code></td>
+            <td><span class="pill edit">edit</span></td>
+            <td>
+              Keep #30's key resolution + no-key/unreadable guard. Change the one
+              <code>env:</code> line from <code>ANTHROPIC_API_KEY: apiKey</code> to
+              <code>ANTHROPIC_API_KEY: token</code> + <code>ANTHROPIC_BASE_URL: baseUrl</code> from
+              the proxy.
+            </td>
+          </tr>
+          <tr>
+            <td class="file"><code>electron/llmProxy.test.ts</code></td>
+            <td><span class="pill new">new</span></td>
+            <td>
+              Headless <code>bun test</code>: a fake upstream asserts the token is validated, the
+              key is swapped, status/body pass through, and a wrong token returns <code>401</code>.
+              No live LLM. Add a <code>test</code> script + CI step.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>Why &amp; what's out of scope</h2>
+      <div class="panels">
+        <div class="panel buys">
+          <h3>What it buys</h3>
+          <ul>
+            <li>
+              <strong>Defense-in-depth.</strong> The decrypted key never enters the subprocess that
+              runs the model loop; a compromised binary/SDK/dependency leaks a useless token.
+            </li>
+            <li>
+              <strong>Agent-in-VM groundwork.</strong> This is exactly the mechanism the in-VM agent
+              needs (key on host, agent holds a token) — built once, no rework.
+            </li>
+            <li>
+              <strong>Anthropic-only egress.</strong> The proxy's single fixed upstream can't be
+              turned into an open relay.
+            </li>
+          </ul>
+        </div>
+        <div class="panel scope">
+          <h3>Honest scope</h3>
+          <ul>
+            <li>
+              <strong>Not closing an open hole today.</strong> The model is already confined to
+              VM-only tools, so it can't read main's or the subprocess's env right now. This hardens
+              the runtime, not a live leak.
+            </li>
+            <li>
+              <strong>Agent stays in-process.</strong> Main still holds the key and runs the agent,
+              so an RCE in main still reaches it — the full payoff needs the agent-in-VM move.
+            </li>
+            <li>
+              <strong>No remote server.</strong> BYOK = the user's key on the user's machine; no
+              custody backend.
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="note">
+        <strong>Two runtime unknowns to confirm on first real run</strong> (don't change the
+        design): (1) the <code>claude</code> binary accepts an <code>http://</code> loopback
+        <code>ANTHROPIC_BASE_URL</code> — Anthropic SDKs normally allow http for localhost; (2) the
+        SDK <code>env</code> is spread over <code>process.env</code> then overridden, so the
+        subprocess keeps <code>PATH</code>/<code>HOME</code> and the real key is replaced by the
+        token regardless of merge-vs-replace semantics. See
+        <a href="agent-in-vm.html">agent-in-vm.html</a> for the larger design this is a step toward.
+      </div>
+
+      <footer>
+        Planned for branch <code>llm-proxy</code> (rebased on <code>#30</code> BYOK). Step toward
+        the agent-in-VM posture; does not move the agent or restrict VM egress.
+      </footer>
+    </div>
+  </body>
+</html>

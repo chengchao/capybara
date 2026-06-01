@@ -18,6 +18,7 @@ jobs:
       - run: bun run fmt:check
       - run: bun run check:electron
       - run: bun run check:renderer
+      - run: bun run test
       - run: bun run build
 
   supervisor-tests:
