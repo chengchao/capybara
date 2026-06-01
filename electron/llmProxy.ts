@@ -28,7 +28,7 @@ const HOP_BY_HOP = new Set([
 export type LlmProxy = {
   /** Loopback URL to hand the agent as `ANTHROPIC_BASE_URL`. */
   baseUrl: string;
-  /** Disposable per-run token the agent sends as `x-api-key`. */
+  /** App-session token (minted once at startup) the agent sends as `x-api-key`. */
   token: string;
   stop(): Promise<void>;
 };
@@ -56,7 +56,7 @@ function filterHeaders(
 
 /**
  * A loopback HTTP proxy that holds the real BYOK key and exposes only a
- * disposable token to the agent subprocess. Requests authenticate with the
+ * token to the agent subprocess. Requests authenticate with the
  * token (sent as `x-api-key`); the proxy swaps in the real key and forwards to
  * a single fixed upstream, so it can never be turned into an open relay.
  */
