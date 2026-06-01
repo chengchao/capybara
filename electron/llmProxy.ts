@@ -116,10 +116,11 @@ export function createLlmProxy(opts: CreateLlmProxyOptions): Promise<LlmProxy> {
         JSON.stringify({ error: { type: "api_error", message: `upstream error: ${err.message}` } }),
       );
     });
-    // The agent connection dropping must surface as a handled `req` error
+    // The agent connection dropping must surface as a handled `req`/`res` error
     // (an unhandled stream 'error' is thrown and would crash main), and must
     // tear down the in-flight upstream request rather than leave it dangling.
     req.on("error", () => upstreamReq.destroy());
+    res.on("error", () => upstreamReq.destroy());
     res.on("close", () => {
       if (!res.writableEnded) upstreamReq.destroy();
     });

@@ -170,7 +170,10 @@ export async function runAgentTask(
     // The real key never enters the subprocess env: it gets the loopback
     // proxy's disposable token + base URL, and the proxy (in main) swaps the
     // token for the real key on the way to Anthropic. `apiKey` above is only
-    // used for the pre-flight no-key/unreadable guard.
+    // used for the pre-flight no-key/unreadable guard. The sibling auth/header
+    // vars below are unset so a credential inherited from the launching shell
+    // (e.g. a subscription user's CLAUDE_CODE_OAUTH_TOKEN) can't ride in via
+    // `...process.env` — the claude CLI reads all of these.
     const proxy = getLlmProxy();
     const options: Options = {
       model: MODEL,
@@ -180,7 +183,14 @@ export async function runAgentTask(
       ...(claudeBinary ? { pathToClaudeCodeExecutable: claudeBinary } : {}),
       ...(resumeSessionId ? { resume: resumeSessionId } : {}),
       executable: app.isPackaged ? "bun" : "node",
-      env: { ...process.env, ANTHROPIC_API_KEY: proxy.token, ANTHROPIC_BASE_URL: proxy.baseUrl },
+      env: {
+        ...process.env,
+        ANTHROPIC_API_KEY: proxy.token,
+        ANTHROPIC_BASE_URL: proxy.baseUrl,
+        ANTHROPIC_AUTH_TOKEN: undefined,
+        CLAUDE_CODE_OAUTH_TOKEN: undefined,
+        ANTHROPIC_CUSTOM_HEADERS: undefined,
+      },
       abortController,
     };
 
