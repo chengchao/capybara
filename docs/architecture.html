@@ -552,8 +552,9 @@
           <code>mcp__capybara__Bash</code>) so it executes in the VM. <code>Read</code> /
           <code>Glob</code> / <code>Write</code> are left as the SDK's built-ins, running natively
           in the agent subprocess. The <code>allowedTools</code> list —
-          <code>mcp__capybara__Bash</code>
-          plus the three bare built-in names — is what splits host I/O from sandboxed shell.
+          <code>mcp__capybara__Bash</code> plus the three bare built-in names — auto-approves those;
+          the SDK's built-in host <code>Bash</code> is then blocked via <code>disallowedTools</code>
+          (allow-listing alone leaves un-listed built-ins runnable), so shell can only reach the VM.
         </p>
       </div>
       <div class="note">
@@ -665,10 +666,10 @@
           <strong>Built-in file tools on host. ◑ Partly shipped.</strong>
           <code>Read</code>/<code>Glob</code>/<code>Write</code> now run as SDK built-ins in the
           agent process — native I/O on the user's files, no copy-through (the built-in host
-          <code>Bash</code> is simply left out of the allow-list, so our VM-routed Bash is the only
-          shell). Reflected in the current architecture above. Still to add:
-          <code>Edit</code>/<code>Grep</code>, and the path gating in items 4–6 — until that lands
-          these tools are ungated on the host.
+          <code>Bash</code> is explicitly blocked via <code>disallowedTools</code> — allow-listing
+          alone leaves it runnable — so our VM-routed Bash is the only shell). Reflected in the
+          current architecture above. Still to add: <code>Edit</code>/<code>Grep</code>, and the
+          path gating in items 4–6 — until that lands these tools are ungated on the host.
         </li>
         <li>
           <strong>Spawn the agent per turn.</strong> On each user message, Electron main spawns the
