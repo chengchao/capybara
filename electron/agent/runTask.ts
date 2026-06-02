@@ -6,12 +6,8 @@ import { app } from "electron";
 import { getLlmProxy } from "../llmProxy";
 import { getAnthropicApiKey, hasStoredApiKey } from "../settings";
 import { getSupervisor } from "../vm";
+import { ALLOWED_TOOLS, TOOL_PREFIX } from "./allowedTools";
 import { buildTools } from "./tools";
-
-const TOOL_PREFIX = "mcp__capybara__";
-// Bash routes through our in-process MCP server into the VM sandbox; Read,
-// Glob, and Write are the SDK's built-in tools running natively on the host.
-const ALLOWED_TOOLS = [TOOL_PREFIX + "Bash", "Read", "Glob", "Write"];
 
 const MODEL = process.env.CAPYBARA_AGENT_MODEL ?? "claude-sonnet-4-6";
 
