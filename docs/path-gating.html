@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Capybara — Path-gating (app-layer folder permissions)</title>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --panel: #1e293b;
+        --panel-2: #334155;
+        --text: #e2e8f0;
+        --text-dim: #94a3b8;
+        --accent: #38bdf8;
+        --warn: #fbbf24;
+        --danger: #f87171;
+        --good: #4ade80;
+        --violet: #a78bfa;
+        --code-bg: #0b1222;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+        margin: 0;
+        padding: 32px 16px 80px;
+        line-height: 1.6;
+      }
+      .wrap {
+        max-width: 980px;
+        margin: 0 auto;
+      }
+      header {
+        margin-bottom: 28px;
+      }
+      h1 {
+        font-size: 28px;
+        margin: 0 0 8px;
+        letter-spacing: -0.02em;
+      }
+      .subtitle {
+        color: var(--text-dim);
+        font-size: 14px;
+      }
+      .crumbs {
+        font-size: 12px;
+        color: var(--text-dim);
+        margin-top: 10px;
+      }
+      .crumbs a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      h2 {
+        font-size: 19px;
+        margin: 40px 0 14px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--panel-2);
+      }
+      h3 {
+        font-size: 14px;
+        margin: 22px 0 8px;
+        color: var(--accent);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      p {
+        margin: 0 0 12px;
+        font-size: 14px;
+      }
+      .dim {
+        color: var(--text-dim);
+      }
+      code {
+        background: var(--code-bg);
+        padding: 1px 5px;
+        border-radius: 3px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12.5px;
+        color: #e7eefc;
+      }
+      pre {
+        background: var(--code-bg);
+        border: 1px solid var(--panel-2);
+        border-radius: 8px;
+        padding: 14px 16px;
+        overflow-x: auto;
+        margin: 12px 0;
+      }
+      pre code {
+        background: none;
+        padding: 0;
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: #cdd9f0;
+      }
+      .tag {
+        display: inline-block;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        padding: 2px 7px;
+        border-radius: 999px;
+        vertical-align: middle;
+      }
+      .tag-new {
+        background: rgba(74, 222, 128, 0.15);
+        color: var(--good);
+        border: 1px solid rgba(74, 222, 128, 0.4);
+      }
+      .tag-edit {
+        background: rgba(56, 189, 248, 0.15);
+        color: var(--accent);
+        border: 1px solid rgba(56, 189, 248, 0.4);
+      }
+      ul {
+        margin: 0 0 12px;
+        padding-left: 20px;
+        font-size: 14px;
+      }
+      li {
+        margin-bottom: 6px;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--panel-2);
+        border-radius: 10px;
+        padding: 16px 18px;
+        margin: 14px 0;
+      }
+      .card.accent {
+        border-left: 3px solid var(--accent);
+      }
+      .card.warn {
+        border-left: 3px solid var(--warn);
+      }
+      .card.good {
+        border-left: 3px solid var(--good);
+      }
+      .card.danger {
+        border-left: 3px solid var(--danger);
+      }
+      .card h3 {
+        margin-top: 0;
+      }
+
+      /* Flow diagram */
+      .flow {
+        background: var(--panel);
+        border: 1px solid var(--panel-2);
+        border-radius: 12px;
+        padding: 20px;
+        margin: 18px 0;
+      }
+      .proc {
+        border: 1px dashed var(--panel-2);
+        border-radius: 10px;
+        padding: 14px;
+        margin-bottom: 14px;
+        position: relative;
+      }
+      .proc-main {
+        border-color: rgba(20, 184, 166, 0.5);
+        background: rgba(20, 184, 166, 0.05);
+      }
+      .proc-child {
+        border-color: rgba(245, 158, 11, 0.5);
+        background: rgba(245, 158, 11, 0.05);
+      }
+      .proc-label {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        font-weight: 700;
+        color: var(--text-dim);
+        margin-bottom: 10px;
+      }
+      .mods {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .mod {
+        background: var(--bg);
+        border: 1px solid var(--panel-2);
+        border-radius: 7px;
+        padding: 8px 11px;
+        font-size: 11px;
+        flex: 1 1 150px;
+      }
+      .mod b {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11.5px;
+        color: var(--text);
+      }
+      .mod span {
+        color: var(--text-dim);
+        display: block;
+        margin-top: 2px;
+      }
+      .steps {
+        list-style: none;
+        margin: 4px 0 0;
+        padding: 0;
+        counter-reset: step;
+      }
+      .steps li {
+        position: relative;
+        padding: 7px 0 7px 34px;
+        font-size: 13px;
+        border-top: 1px solid var(--panel-2);
+      }
+      .steps li::before {
+        counter-increment: step;
+        content: counter(step);
+        position: absolute;
+        left: 0;
+        top: 6px;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: var(--accent);
+        color: var(--bg);
+        font-weight: 700;
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .steps li.deny::before {
+        background: var(--danger);
+      }
+      .steps li.allow::before {
+        background: var(--good);
+      }
+      .steps .who {
+        color: var(--violet);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11.5px;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 13px;
+        margin: 10px 0;
+      }
+      th,
+      td {
+        border: 1px solid var(--panel-2);
+        padding: 7px 10px;
+        text-align: left;
+      }
+      th {
+        background: var(--panel);
+        color: var(--text-dim);
+        font-weight: 600;
+      }
+      td code {
+        font-size: 11.5px;
+      }
+      .keyline {
+        color: var(--warn);
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>Path-gating — app-layer folder permissions for host file tools</h1>
+        <div class="subtitle">
+          Implementation plan. Bounds the host filesystem reach of the SDK built-in
+          <code>Read</code>/<code>Glob</code>/<code>Write</code>/<code>Edit</code>/<code>Grep</code>
+          tools with a deny&nbsp;→&nbsp;request&nbsp;→&nbsp;retry consent loop.
+        </div>
+        <div class="crumbs">
+          Implements <a href="architecture.html">architecture.html</a> proposed-direction items 4–6
+          · full design in <a href="host-agent-vm-bash.html">host-agent-vm-bash.html</a> · follows
+          PR&nbsp;#33 (<code>c8a21d3</code>)
+        </div>
+      </header>
+
+      <h2>Context</h2>
+      <p>
+        PR&nbsp;#33 made <code>Read</code>/<code>Glob</code>/<code>Write</code> run as SDK built-in
+        tools natively on the <strong>host</strong> filesystem (and confined <code>Bash</code> to
+        the VM). Those host file tools currently have <strong>no path restriction</strong> — they
+        can touch any file the Electron process can (home dir, SSH keys, anything). That ungated
+        host access is the deliberate, documented gap from the "host agent + VM bash" design:
+        PR&nbsp;#33 shipped the <em>capability</em> without the <em>boundary</em>.
+      </p>
+      <p>
+        This plan adds the boundary. The agent may only access host paths the user has explicitly
+        granted, enforced per tool call. It discovers the boundary by being
+        <strong>denied</strong>, <strong>requests</strong> access through a consent tool, the user
+        <strong>approves</strong> via a native dialog, and the agent <strong>retries</strong>.
+        Grants are <strong>session-only and in-memory</strong> in the Electron main process; every
+        new conversation starts empty and re-asks.
+      </p>
+
+      <h2>Why this shape</h2>
+      <div class="card accent">
+        <p style="margin: 0">
+          The in-process MCP server already runs in the Electron <strong>main</strong> process, and
+          — critically — the TS SDK invokes <code>hooks</code> callbacks
+          <strong>in that same process</strong> (they're JS functions called over the control
+          channel, not shell hooks in the spawned <code>claude</code> binary). So the
+          <code>PreToolUse</code> hook, the grant store, and the consent dialog all live in main
+          with direct access to shared in-memory state —
+          <strong>no new IPC and no renderer changes.</strong>
+        </p>
+      </div>
+      <p class="dim">
+        Verified against the SDK types: <code>Options.hooks</code> is
+        <code>Partial&lt;Record&lt;HookEvent, HookCallbackMatcher[]&gt;&gt;</code>; the PreToolUse
+        input carries <code>session_id</code>, <code>tool_name</code>, <code>tool_input</code>; deny
+        is returned as
+        <code
+          >{ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny",
+          permissionDecisionReason } }</code
+        >; returning <code>{}</code> defers to the normal flow (which auto-approves allow-listed
+        tools).
+      </p>
+
+      <div class="flow">
+        <div class="proc proc-child">
+          <div class="proc-label">spawned claude binary — model + built-in Read/Write/…</div>
+        </div>
+        <div class="proc proc-main">
+          <div class="proc-label">Electron main process (one process)</div>
+          <div class="mods">
+            <div class="mod">
+              <b>runTask.ts</b><span>holds sessionId, builds Options + hook</span>
+            </div>
+            <div class="mod"><b>PreToolUse hook</b><span>callback, runs in-process</span></div>
+            <div class="mod">
+              <b>grants.ts</b
+              ><span>evaluateFileTool / grantDirectory · Map&lt;sdkSessionId&gt;</span>
+            </div>
+            <div class="mod"><b>tools.ts</b><span>request_capybara_directory (MCP)</span></div>
+            <div class="mod"><b>consent.ts</b><span>native Allow/Deny dialog</span></div>
+          </div>
+        </div>
+        <ol class="steps">
+          <li>
+            <span class="who">claude → hook</span> &nbsp;<code>Read(file_path)</code> on an
+            ungranted path; hook calls <code>evaluateFileTool</code>.
+          </li>
+          <li class="deny">
+            <span class="who">hook → claude</span> &nbsp;grant store empty →
+            <strong>deny + structured reason</strong>, surfaced as an
+            <code>is_error</code> tool_result the model reads.
+          </li>
+          <li>
+            <span class="who">claude → tool</span> &nbsp;model calls
+            <code>request_capybara_directory({ path })</code> → <code>consent.ts</code> shows a
+            native dialog.
+          </li>
+          <li class="allow">
+            <span class="who">user Allow → retry</span> &nbsp;<code
+              >grantDirectory(getSdkSessionId)</code
+            >
+            records it; model retries <code>Read</code>; hook now returns <code>{}</code> → built-in
+            runs.
+          </li>
+        </ol>
+        <p class="dim" style="margin: 12px 0 0; font-size: 12.5px">
+          Both the hook (<code>input.session_id</code>) and the grant-write
+          (<code>getSdkSessionId()</code>, from runTask's <code>sessionId</code>) key on the
+          <span class="keyline">SDK session id</span> — the same value — so a grant made in step 3
+          is visible to the retry in step 4. <code>resolveSession</code> returns the <em>VM</em> id
+          and must <strong>not</strong> be the grant key.
+        </p>
+      </div>
+
+      <h2>New files</h2>
+
+      <div class="card">
+        <h3><span class="tag tag-new">new</span> &nbsp;electron/agent/grants.ts</h3>
+        <p class="dim">Pure — the only module with real logic; the unit-test target.</p>
+        <pre><code>export function grantDirectory(sessionId: string, dir: string): void;
+export function evaluateFileTool(
+  sessionId: string, toolName: string, toolInput: unknown,
+): { allow: true } | { deny: true; reason: string };</code></pre>
+        <ul>
+          <li>
+            <code>const store = new Map&lt;string, string[]&gt;()</code> — a set of granted dirs per
+            session. <strong>One access level:</strong> a granted folder allows <em>any</em> file
+            tool on paths inside it (read and write are not distinguished — KISS).
+          </li>
+          <li>
+            <code>GATED</code>: bare built-in name → <code>pathField</code> —
+            <code>Read→file_path</code>, <code>Write→file_path</code>, <code>Edit→file_path</code>,
+            <code>Glob→path</code>, <code>Grep→path</code>. <strong>Bare names</strong> (built-ins
+            arrive unprefixed; the consent tool and <code>Bash</code> arrive as
+            <code>mcp__capybara__*</code> and are absent from <code>GATED</code>).
+          </li>
+          <li>
+            <code>normalize(p)</code>: expand leading <code>~</code> → <code>os.homedir()</code>;
+            <code>path.resolve()</code> to collapse <code>..</code>; falsy/relative → sentinel that
+            forces a deny. <strong>Symlink/realpath resolution deferred</strong> (comment it as a
+            known trust-boundary gap). <code>grantDirectory</code> normalizes too, so grants and
+            candidates share one canonical space.
+          </li>
+          <li>
+            Match: <code>candidate === dir || candidate.startsWith(dir + path.sep)</code> (the
+            <code>+ path.sep</code> guard makes <code>/foo/barbaz</code> <em>not</em> match a grant
+            of <code>/foo/bar</code>). Any granted dir covering the candidate path → allow,
+            regardless of whether the tool reads or writes.
+          </li>
+          <li>
+            <strong>Early return:</strong> any <code>toolName</code> not in <code>GATED</code> →
+            <code>{ allow: true }</code>. This one line keeps the consent tool and
+            <code>mcp__capybara__Bash</code> ungated.
+          </li>
+          <li>Deny reason (structured; suggests the containing directory):</li>
+        </ul>
+        <pre><code>Path "/Users/x/Desktop/a.txt" is not connected. Call
+request_capybara_directory({ path: "/Users/x/Desktop" })
+to request access, then retry.</code></pre>
+      </div>
+
+      <div class="card">
+        <h3><span class="tag tag-new">new</span> &nbsp;electron/consent.ts</h3>
+        <p class="dim">Native dialog — the only side-effecting piece.</p>
+        <pre><code>export async function requestDirectoryConsent(p: string): Promise&lt;boolean&gt;;</code></pre>
+        <ul>
+          <li>
+            First line:
+            <code>if (process.env.CAPYBARA_AUTO_CONSENT === "1") return true;</code> (headless e2e).
+          </li>
+          <li>
+            <code>const win = BrowserWindow.getAllWindows()[0];</code> then
+            <code
+              >dialog.showMessageBox(win, { message: `Capybara wants to access ${p}`, buttons:
+              ["Deny", "Allow"], defaultId: 0, cancelId: 0 })</code
+            >; return <code>response === 1</code>. Use <code>getAllWindows()[0]</code> — one window,
+            and <code>mainWindow</code> is block-scoped/not exported.
+          </li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3><span class="tag tag-new">new</span> &nbsp;electron/agent/grants.test.ts</h3>
+        <p class="dim" style="margin: 0"><code>bun:test</code> unit coverage — see Verification.</p>
+      </div>
+
+      <h2>Edits</h2>
+
+      <div class="card">
+        <h3><span class="tag tag-edit">edit</span> &nbsp;electron/agent/runTask.ts</h3>
+        <p>
+          Add <code>hooks</code> to the <code>Options</code> bag (~line 188). The input carries
+          <code>session_id</code>, so no closure threading for the hook:
+        </p>
+        <pre><code>hooks: {
+  PreToolUse: [
+    { hooks: [ async (input) =&gt; {
+        const i = input as { session_id: string; tool_name: string; tool_input: unknown };
+        const r = evaluateFileTool(i.session_id, i.tool_name, i.tool_input);
+        if ("allow" in r) return {};
+        return { hookSpecificOutput: {
+          hookEventName: "PreToolUse",
+          permissionDecision: "deny",
+          permissionDecisionReason: r.reason,
+        } };
+    } ] },
+  ],
+},</code></pre>
+        <p class="dim">
+          No <code>matcher</code> (default-all; <code>GATED</code> early-returns for non-file
+          tools). The deny surfaces as an <code>is_error</code> tool_result, which the existing
+          <code>relay()</code> (runTask.ts:117–125) already forwards — no new
+          <code>AgentEvent</code>.
+        </p>
+        <p>
+          Update the call (line 176) to pass the SDK-session thunk:
+          <code>buildTools(supervisor, resolveSession, () =&gt; sessionId ?? "")</code>.
+        </p>
+      </div>
+
+      <div class="card">
+        <h3><span class="tag tag-edit">edit</span> &nbsp;electron/agent/tools.ts</h3>
+        <p>
+          Signature →
+          <code>buildTools(supervisor, resolveSession, getSdkSessionId: () =&gt; string)</code>,
+          mirroring the existing positional <code>resolveSession</code> thunk (no options-bag).
+          Import <code>requestDirectoryConsent</code> from <code>../consent</code> and
+          <code>grantDirectory</code> from <code>./grants</code> directly. Add to the returned
+          array:
+        </p>
+        <pre><code>tool("request_capybara_directory",
+  "Request access to a host folder. Call this after a file tool is denied, then retry.",
+  { path: z.string() },
+  async (args) =&gt; {
+    const ok = await requestDirectoryConsent(args.path);
+    if (!ok) return { content: [{ type: "text", text: `User denied access to ${args.path}.` }], isError: true };
+    grantDirectory(getSdkSessionId(), args.path);
+    return { content: [{ type: "text", text: `Granted access to ${args.path}. Retry your file operation.` }] };
+  })</code></pre>
+        <p class="dim">
+          Grants key on <code>getSdkSessionId()</code> — the <span class="keyline">same</span> value
+          the hook reads as <code>input.session_id</code> — deliberately <em>not</em>
+          <code>resolveSession</code>'s VM id.
+        </p>
+      </div>
+
+      <div class="card">
+        <h3><span class="tag tag-edit">edit</span> &nbsp;electron/agent/allowedTools.ts</h3>
+        <p style="margin: 0">
+          Add <code>TOOL_PREFIX + "request_capybara_directory"</code> to
+          <code>ALLOWED_TOOLS</code> so the consent tool is auto-approved.
+        </p>
+      </div>
+
+      <div class="card">
+        <h3><span class="tag tag-edit">edit</span> &nbsp;electron/agent/allowedTools.test.ts</h3>
+        <p style="margin: 0">
+          Assert <code>ALLOWED_TOOLS</code> contains
+          <code>${TOOL_PREFIX}request_capybara_directory</code>.
+        </p>
+      </div>
+
+      <div class="card warn">
+        <h3 style="color: var(--warn)">Scope note — Edit / Grep</h3>
+        <p style="margin: 0">
+          The gate covers all five host file tools (<code>Read/Glob/Write/Edit/Grep</code>)
+          regardless of the allow-list, so it also pre-closes the reachable-but-unlisted
+          <code>Edit</code>/<code>Grep</code> hole. Actually <em>enabling</em> them (adding to
+          <code>ALLOWED_TOOLS</code>) stays a separate follow-up — now safe to flip because the gate
+          already covers them.
+        </p>
+      </div>
+
+      <h2>Verification</h2>
+      <ol>
+        <li>
+          <strong>Unit (<code>grants.test.ts</code>), <code>bun test electron</code>:</strong>
+          ungranted-path deny carrying the exact reason substring; allow after
+          <code>grantDirectory</code> (for both a read tool and a write tool — one grant covers
+          both); subpath allow; prefix-spoof deny (<code>/foo/barbaz</code> not under
+          <code>/foo/bar</code>); <code>~</code> expansion; relative/missing-path deny; Glob with no
+          <code>path</code> deny; per-session isolation (grant in A invisible to B).
+        </li>
+        <li>
+          <strong><code>allowedTools.test.ts</code>:</strong> consent tool present in
+          <code>ALLOWED_TOOLS</code>.
+        </li>
+        <li>
+          <strong>Static gates</strong> (<code>check:electron</code>):
+          <code>tsc --noEmit -p electron</code>, <code>oxlint -D correctness electron</code>,
+          <code>oxfmt --check</code>.
+        </li>
+        <li>
+          <strong>End-to-end on the real app</strong> (drive via CDP, as in the PR&nbsp;#33 test):
+          <ul>
+            <li>
+              <strong>Deny → request (no dialog needed):</strong> ask the agent to read a path under
+              <code>~/Desktop</code>. In the <code>agent-event</code> stream observe a
+              <code>tool_result</code> with <code>isError: true</code> carrying the deny reason,
+              immediately followed by a <code>tool_use</code> for
+              <code>request_capybara_directory</code>. Proves gate + model reaction with zero
+              dialog.
+            </li>
+            <li>
+              <strong>Allow path:</strong> relaunch with <code>CAPYBARA_AUTO_CONSENT=1</code>, same
+              prompt; observe the retried <code>Read</code> returns <code>isError: false</code>.
+              (Optionally one manual click-through of the real dialog without the env var.)
+            </li>
+          </ul>
+        </li>
+      </ol>
+
+      <h2>
+        Deferred
+        <span class="dim" style="font-size: 13px; font-weight: 400"
+          >(out of scope, per docs + KISS)</span
+        >
+      </h2>
+      <ul>
+        <li>
+          <strong>VM-mount of granted dirs</strong> (so VM <code>Bash</code> sees them via the
+          supervisor's <code>connect_directory</code>). Granted host dirs stay invisible to Bash —
+          consistent with the system prompt's host/VM split. Follow-up.
+        </li>
+        <li>
+          <strong>Symlink / path-escape resolution</strong> (realpath). Documented trust-boundary
+          gap.
+        </li>
+        <li>
+          <strong>Grant eviction / LRU.</strong> Bounded by process lifetime; no consumer needs it.
+        </li>
+        <li>
+          <strong><code>srt</code>-style OS sandbox around the host agent.</strong> Deferred in the
+          docs.
+        </li>
+      </ul>
+
+      <h2>
+        KISS guardrails <span class="dim" style="font-size: 13px; font-weight: 400">(do NOT)</span>
+      </h2>
+      <div class="card danger">
+        <ul style="margin: 0">
+          <li>
+            Don't pass <code>requestDirectoryConsent</code> as a <code>buildTools</code> param —
+            single call site, import it.
+          </li>
+          <li>
+            Don't build an options-bag for <code>buildTools</code>; one
+            <code>getSdkSessionId</code> thunk mirrors the existing
+            <code>resolveSession</code> thunk.
+          </li>
+          <li>
+            Don't add a <code>matcher</code> to the hook; default-all +
+            <code>GATED</code> early-return is simpler.
+          </li>
+          <li>
+            Don't add a new <code>AgentEvent</code> type for denials; the existing
+            <code>tool_result</code>/<code>isError</code> path carries it.
+          </li>
+          <li>
+            Don't key grants off <code>resolveSession</code> (VM id) — use the SDK session id on
+            both sides.
+          </li>
+        </ul>
+      </div>
+    </div>
+  </body>
+</html>
