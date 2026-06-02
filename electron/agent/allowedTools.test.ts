@@ -13,3 +13,9 @@ test("the only usable shell is the VM-routed Bash", () => {
   expect(ALLOWED_TOOLS).not.toContain("Bash");
   expect(DISALLOWED_TOOLS).toContain("Bash");
 });
+
+// The consent tool must be auto-approved (MCP-prefixed) — the model can't be
+// prompted for the very tool it uses to escape a deny, or the flow deadlocks.
+test("the folder-consent tool is allow-listed", () => {
+  expect(ALLOWED_TOOLS).toContain(`${TOOL_PREFIX}request_capybara_directory`);
+});
