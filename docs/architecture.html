@@ -417,12 +417,17 @@
             <ul class="component-list">
               <li>Spawned as <code>bun cli.js</code></li>
               <li>Bun bundled at <code>process.resourcesPath/bun</code></li>
-              <li>env: <code>ANTHROPIC_BASE_URL</code> → loopback proxy, <code>ANTHROPIC_API_KEY</code> = token</li>
+              <li>
+                env: <code>ANTHROPIC_BASE_URL</code> → loopback proxy,
+                <code>ANTHROPIC_API_KEY</code> = token
+              </li>
               <li>sibling auth vars unset (no inherited-cred ride-along)</li>
             </ul>
           </div>
           <div class="component boundary">
-            <div class="component-name">built-in file tools <small>(Read / Glob / Write)</small></div>
+            <div class="component-name">
+              built-in file tools <small>(Read / Glob / Write)</small>
+            </div>
             <div class="component-role">
               The SDK's own tools, run <strong>inside this subprocess on the host</strong> — native
               I/O on the user's real files, no round-trip to the VM. Bash is the only tool that
@@ -433,7 +438,9 @@
         </div>
       </div>
 
-      <div class="edge-label">↓ JSON-RPC over <code>limactl shell</code> stdio (line-delim) · <em>Bash only</em></div>
+      <div class="edge-label">
+        ↓ JSON-RPC over <code>limactl shell</code> stdio (line-delim) · <em>Bash only</em>
+      </div>
 
       <!-- VM -->
       <div class="tier tier-vm">
@@ -543,8 +550,9 @@
         <p>
           Only <code>Bash</code> is shadowed by our in-process MCP server (prefixed
           <code>mcp__capybara__Bash</code>) so it executes in the VM. <code>Read</code> /
-          <code>Glob</code> / <code>Write</code> are left as the SDK's built-ins, running natively in
-          the agent subprocess. The <code>allowedTools</code> list — <code>mcp__capybara__Bash</code>
+          <code>Glob</code> / <code>Write</code> are left as the SDK's built-ins, running natively
+          in the agent subprocess. The <code>allowedTools</code> list —
+          <code>mcp__capybara__Bash</code>
           plus the three bare built-in names — is what splits host I/O from sandboxed shell.
         </p>
       </div>
@@ -599,9 +607,9 @@
         <li>
           <strong>Claude emits an <code>assistant</code> message</strong>. A
           <code>Read</code>/<code>Glob</code>/<code>Write</code> <code>tool_use</code> runs
-          <em>in the subprocess</em> against the host filesystem and returns without touching main or
-          the VM. Only a <code>Bash</code> <code>tool_use</code> calls back into main's in-process MCP
-          handler — the steps below are that path.
+          <em>in the subprocess</em> against the host filesystem and returns without touching main
+          or the VM. Only a <code>Bash</code> <code>tool_use</code> calls back into main's
+          in-process MCP handler — the steps below are that path.
         </li>
         <li>
           <strong>Bash handler</strong> calls
@@ -635,7 +643,11 @@
     >
       <h3 style="color: var(--warn)">Proposed direction — host agent + VM bash</h3>
       <p style="margin: 0 0 12px; color: var(--text-dim); font-size: 13px">
-        Where we're heading. Full design:
+        Where we're heading. The <em>tool placement</em> below (Bash in the VM, file tools on the
+        host) and the LLM proxy have already shipped and are folded into the current architecture
+        above — items are tagged where that's the case. What remains is the structural shift:
+        spawning the agent per turn (item 3) and the app-layer folder-grant consent flow (items
+        4–6). Full design:
         <a href="host-agent-vm-bash.html" style="color: var(--accent)">host-agent-vm-bash.html</a>.
         Related notes: <a href="llm-proxy.html" style="color: var(--accent)">llm-proxy.html</a> (the
         host LLM proxy),
@@ -644,18 +656,19 @@
       </p>
       <ol>
         <li>
-          <strong>Bash off the host.</strong> The only foot-gun tool moves into the Lima VM via a
-          custom <code>workspace bash</code> MCP that forwards to the VM. Each session has a
-          workspace dir; granted host dirs are mounted in so commands can operate on the user's
-          project.
+          <strong>Bash off the host. ✓ Already current.</strong> Bash routes into the Lima VM today
+          via the in-process MCP server (it always has). Each session has a workspace dir; granted
+          host dirs are mounted in so commands can operate on the user's project. The remaining
+          delta is cosmetic — folding it under the per-turn restructure below.
         </li>
         <li>
           <strong>Built-in file tools on host. ◑ Partly shipped.</strong>
-          <code>Read</code>/<code>Glob</code>/<code>Write</code> now run as SDK built-ins in the agent
-          process — native I/O on the user's files, no copy-through (the built-in host
-          <code>Bash</code> stays disallowed; our VM-routed Bash is the only shell). Reflected in the
-          current architecture above. Still to add: <code>Edit</code>/<code>Grep</code>, and the path
-          gating in items 4–6 — until that lands these tools are ungated on the host.
+          <code>Read</code>/<code>Glob</code>/<code>Write</code> now run as SDK built-ins in the
+          agent process — native I/O on the user's files, no copy-through (the built-in host
+          <code>Bash</code> is simply left out of the allow-list, so our VM-routed Bash is the only
+          shell). Reflected in the current architecture above. Still to add:
+          <code>Edit</code>/<code>Grep</code>, and the path gating in items 4–6 — until that lands
+          these tools are ungated on the host.
         </li>
         <li>
           <strong>Spawn the agent per turn.</strong> On each user message, Electron main spawns the
