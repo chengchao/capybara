@@ -368,10 +368,24 @@
           <div class="component">
             <div class="component-name">agent/tools.ts</div>
             <div class="component-role">
-              In-process MCP server defining <code>Bash</code>, <code>Read</code>,
-              <code>Glob</code>. Each handler calls <code>SupervisorClient.run_as_session</code> —
-              every tool call lands in the sandbox.
+              In-process MCP server defining just <code>Bash</code>. Its handler calls
+              <code>SupervisorClient.run_as_session</code> — so bash lands in the VM sandbox.
+              <code>Read</code> / <code>Glob</code> / <code>Write</code> are SDK built-ins (Tier 3),
+              not defined here.
             </div>
+          </div>
+          <div class="component boundary">
+            <div class="component-name">llmProxy.ts</div>
+            <div class="component-role">
+              Loopback HTTP proxy on <code>127.0.0.1:&lt;ephemeral&gt;</code>. Holds the real BYOK
+              key; hands the subprocess only a token. Swaps token → real key and forwards to
+              <code>api.anthropic.com</code>. The real key never enters the subprocess.
+            </div>
+            <ul class="component-list">
+              <li>token minted once at startup (app-session)</li>
+              <li>getApiKey() reads keychain (safeStorage)</li>
+              <li>x-api-key must equal token, else 401</li>
+            </ul>
           </div>
         </div>
       </div>
@@ -403,12 +417,30 @@
             <ul class="component-list">
               <li>Spawned as <code>bun cli.js</code></li>
               <li>Bun bundled at <code>process.resourcesPath/bun</code></li>
+              <li>
+                env: <code>ANTHROPIC_BASE_URL</code> → loopback proxy,
+                <code>ANTHROPIC_API_KEY</code> = token
+              </li>
+              <li>sibling auth vars unset (no inherited-cred ride-along)</li>
             </ul>
+          </div>
+          <div class="component boundary">
+            <div class="component-name">
+              built-in file tools <small>(Read / Glob / Write)</small>
+            </div>
+            <div class="component-role">
+              The SDK's own tools, run <strong>inside this subprocess on the host</strong> — native
+              I/O on the user's real files, no round-trip to the VM. Bash is the only tool that
+              leaves for the sandbox. <strong>Not</strong> inside Tier 5: these read and write the
+              host filesystem directly, and are currently ungated (no path allow-list yet).
+            </div>
           </div>
         </div>
       </div>
 
-      <div class="edge-label">↓ JSON-RPC over <code>limactl shell</code> stdio (line-delim)</div>
+      <div class="edge-label">
+        ↓ JSON-RPC over <code>limactl shell</code> stdio (line-delim) · <em>Bash only</em>
+      </div>
 
       <!-- VM -->
       <div class="tier tier-vm">
@@ -498,9 +530,11 @@
       <div class="note">
         <h3>Trust boundary</h3>
         <p>
-          Tier 5 is the security perimeter. The agent's LLM-decided commands cannot escape bwrap's
-          mount + PID namespace. Per-session Linux user is defense-in-depth under that boundary, not
-          the primary gate.
+          Tier 5 is the perimeter <em>for Bash</em>: LLM-decided shell commands cannot escape
+          bwrap's mount + PID namespace, and the per-session Linux user is defense-in-depth under
+          it. But the built-in file tools (Read/Glob/Write) run on the host outside this boundary
+          and are not yet path-gated — today they can touch any file the app can. Closing that gap
+          (the app-layer grant store) is the load-bearing TODO below.
         </p>
       </div>
       <div class="note">
@@ -512,11 +546,25 @@
         </p>
       </div>
       <div class="note">
-        <h3>Tool interception</h3>
+        <h3>Tool routing</h3>
         <p>
-          The SDK ships Bash/Read/Glob as built-in tools that would run on the host. Our in-process
-          MCP server shadows them by name (prefixed <code>mcp__capybara__*</code>); the SDK's
-          <code>allowedTools</code> allow-list keeps only ours, blocking the unsafe defaults.
+          Only <code>Bash</code> is shadowed by our in-process MCP server (prefixed
+          <code>mcp__capybara__Bash</code>) so it executes in the VM. <code>Read</code> /
+          <code>Glob</code> / <code>Write</code> are left as the SDK's built-ins, running natively
+          in the agent subprocess. The <code>allowedTools</code> list —
+          <code>mcp__capybara__Bash</code> plus the three bare built-in names — auto-approves those;
+          the SDK's built-in host <code>Bash</code> is then blocked via <code>disallowedTools</code>
+          (allow-listing alone leaves un-listed built-ins runnable), so shell can only reach the VM.
+        </p>
+      </div>
+      <div class="note">
+        <h3>BYOK key custody</h3>
+        <p>
+          The real <code>ANTHROPIC_API_KEY</code> lives only in the OS keychain (Electron
+          <code>safeStorage</code>) and main's memory. The agent subprocess gets a loopback
+          <code>ANTHROPIC_BASE_URL</code> + an app-session token; <code>llmProxy.ts</code> swaps the
+          token for the real key on the way upstream. A compromised subprocess holds no reusable
+          credential and can only reach the one fixed upstream.
         </p>
       </div>
       <div class="note">
@@ -549,15 +597,23 @@
         </li>
         <li>
           <strong>SDK spawns the <code>claude</code> binary</strong> as a subprocess (under bundled
-          Bun). Sends prompt + tool defs.
+          Bun). Its env carries the loopback proxy's <code>ANTHROPIC_BASE_URL</code> + a token in
+          place of the real key. Sends prompt + tool defs.
         </li>
         <li>
-          <strong>Claude emits an <code>assistant</code> message</strong>. If it contains a
-          <code>tool_use</code> block (e.g. Bash), the SDK calls back into main's in-process MCP
-          handler.
+          <strong>Each LLM round-trip hits the loopback proxy</strong> (not Anthropic directly): the
+          proxy in main verifies the token, swaps in the real BYOK key from the keychain, and
+          forwards to <code>api.anthropic.com</code>. The subprocess never sees the real key.
         </li>
         <li>
-          <strong>Tool handler</strong> calls
+          <strong>Claude emits an <code>assistant</code> message</strong>. A
+          <code>Read</code>/<code>Glob</code>/<code>Write</code> <code>tool_use</code> runs
+          <em>in the subprocess</em> against the host filesystem and returns without touching main
+          or the VM. Only a <code>Bash</code> <code>tool_use</code> calls back into main's
+          in-process MCP handler — the steps below are that path.
+        </li>
+        <li>
+          <strong>Bash handler</strong> calls
           <code>supervisor.request("run_as_session", { command, … })</code> via the persistent
           SupervisorClient.
         </li>
@@ -588,7 +644,11 @@
     >
       <h3 style="color: var(--warn)">Proposed direction — host agent + VM bash</h3>
       <p style="margin: 0 0 12px; color: var(--text-dim); font-size: 13px">
-        Where we're heading. Full design:
+        Where we're heading. The <em>tool placement</em> below (Bash in the VM, file tools on the
+        host) and the LLM proxy have already shipped and are folded into the current architecture
+        above — items are tagged where that's the case. What remains is the structural shift:
+        spawning the agent per turn (item 3) and the app-layer folder-grant consent flow (items
+        4–6). Full design:
         <a href="host-agent-vm-bash.html" style="color: var(--accent)">host-agent-vm-bash.html</a>.
         Related notes: <a href="llm-proxy.html" style="color: var(--accent)">llm-proxy.html</a> (the
         host LLM proxy),
@@ -597,17 +657,19 @@
       </p>
       <ol>
         <li>
-          <strong>Bash off the host.</strong> The only foot-gun tool moves into the Lima VM via a
-          custom <code>workspace bash</code> MCP that forwards to the VM. Each session has a
-          workspace dir; granted host dirs are mounted in so commands can operate on the user's
-          project.
+          <strong>Bash off the host. ✓ Already current.</strong> Bash routes into the Lima VM today
+          via the in-process MCP server (it always has). Each session has a workspace dir; granted
+          host dirs are mounted in so commands can operate on the user's project. The remaining
+          delta is cosmetic — folding it under the per-turn restructure below.
         </li>
         <li>
-          <strong>Built-in file tools on host.</strong> Keep
-          <code>Read</code>/<code>Write</code>/<code>Edit</code>/<code>Glob</code>/<code>Grep</code>
-          as SDK built-ins running in the agent process — native I/O on the user's files, no
-          copy-through.
-          <code>Bash</code> is no longer in the host's allowed-tool set.
+          <strong>Built-in file tools on host. ◑ Partly shipped.</strong>
+          <code>Read</code>/<code>Glob</code>/<code>Write</code> now run as SDK built-ins in the
+          agent process — native I/O on the user's files, no copy-through (the built-in host
+          <code>Bash</code> is explicitly blocked via <code>disallowedTools</code> — allow-listing
+          alone leaves it runnable — so our VM-routed Bash is the only shell). Reflected in the
+          current architecture above. Still to add: <code>Edit</code>/<code>Grep</code>, and the
+          path gating in items 4–6 — until that lands these tools are ungated on the host.
         </li>
         <li>
           <strong>Spawn the agent per turn.</strong> On each user message, Electron main spawns the
@@ -635,13 +697,12 @@
           <strong>Session-only grants.</strong> Grants live in main's in-memory store and are gone
           when the conversation ends. Each new conversation starts empty and re-asks.
         </li>
-        <li>
-          <strong>BYOK key out of the agent process.</strong> A loopback LLM proxy in main injects
-          the real <code>ANTHROPIC_API_KEY</code>; the <code>claude</code> subprocess gets a
-          per-turn token and <code>ANTHROPIC_BASE_URL</code> pointing at the proxy. The token dies
-          with the process at end-of-turn — a compromised subprocess holds nothing reusable.
-        </li>
       </ol>
+      <p style="margin: 12px 0 0; color: var(--text-dim); font-size: 13px">
+        The BYOK-key-out-of-the-agent piece of this direction has already shipped (loopback LLM
+        proxy) and now lives in the current architecture above — see
+        <a href="llm-proxy.html" style="color: var(--accent)">llm-proxy.html</a>.
+      </p>
     </div>
 
     <div class="annotations" style="margin-top: 32px">

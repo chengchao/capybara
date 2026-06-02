@@ -6,14 +6,12 @@ import { app } from "electron";
 import { getLlmProxy } from "../llmProxy";
 import { getAnthropicApiKey, hasStoredApiKey } from "../settings";
 import { getSupervisor } from "../vm";
+import { ALLOWED_TOOLS, DISALLOWED_TOOLS, TOOL_PREFIX } from "./allowedTools";
 import { buildTools } from "./tools";
-
-const TOOL_PREFIX = "mcp__capybara__";
-const ALLOWED_TOOLS = ["Bash", "Read", "Glob"].map((name) => TOOL_PREFIX + name);
 
 const MODEL = process.env.CAPYBARA_AGENT_MODEL ?? "claude-sonnet-4-6";
 
-const SYSTEM_PROMPT = `You are Capybara, an office-work agent. Your tools (Bash, Read, Glob) execute inside a Lima VM sandbox; the working directory is /workspace, and connected host directories appear at /mnt/<name>. You cannot run commands on the host directly — everything routes through the sandbox.`;
+const SYSTEM_PROMPT = `You are Capybara, an office-work agent. Read, Glob, and Write operate directly on the host filesystem — use absolute paths. Bash runs inside a Lima VM sandbox, a separate filesystem where the working directory is /workspace and connected host directories appear at /mnt/<name>. Files you Read/Write on the host are not visible to Bash unless they fall under a connected directory, and vice versa.`;
 
 export type AgentEvent =
   | { event: "task_started"; taskId: string }
@@ -66,6 +64,14 @@ function ensureBundledBunOnPath(): void {
   const bundledDir = process.resourcesPath;
   process.env.PATH = `${bundledDir}${path.delimiter}${process.env.PATH ?? ""}`;
   pathPrepended = true;
+}
+
+// Map the SDK's 36-char UUID session id to a supervisor-valid VM session id
+// (`^[a-z][a-z0-9_-]{0,22}$`): an `s` prefix to guarantee a letter-first id,
+// plus 22 hex chars of the UUID. Deterministic, so a resumed conversation
+// resolves to the same VM workspace.
+function vmSessionId(sdkSessionId: string): string {
+  return `s${sdkSessionId.replace(/-/g, "").slice(0, 22)}`;
 }
 
 function stripToolPrefix(name: string): string {
@@ -144,20 +150,24 @@ export async function runAgentTask(
   }
 
   const supervisor = getSupervisor();
-  // The SDK session id doubles as the VM sandbox session id: a new
-  // conversation gets a fresh id (and so a fresh /workspace), and resuming
-  // reuses the id (same history, same workspace). For a resumed turn the id
-  // is known up front; for a new one it arrives in the `init` message, which
-  // the SDK always emits before the first tool call. The VM session is created
-  // lazily on first tool use (idempotent).
+  // The VM sandbox session is keyed off the SDK session id: a new conversation
+  // gets a fresh id (and so a fresh /workspace), and resuming reuses it (same
+  // history, same workspace). For a resumed turn the id is known up front; for
+  // a new one it arrives in the `init` message, which the SDK always emits
+  // before the first tool call. The VM session is created lazily on first tool
+  // use (idempotent). We can't hand the supervisor the SDK id raw — it's a
+  // 36-char UUID, but the supervisor requires `^[a-z][a-z0-9_-]{0,22}$` — so we
+  // derive a stable, valid id from it (deterministic, so resume maps to the
+  // same workspace). The SDK id is still what we emit/resume on.
   let sessionId: string | null = resumeSessionId ?? null;
   let vmSession: Promise<unknown> | null = null;
   const resolveSession = async (): Promise<string> => {
     const id = sessionId;
     if (!id) throw new Error("agent tool used before the SDK session was initialized");
-    if (!vmSession) vmSession = supervisor.request("create_session", { session_id: id });
+    const vmId = vmSessionId(id);
+    if (!vmSession) vmSession = supervisor.request("create_session", { session_id: vmId });
     await vmSession;
-    return id;
+    return vmId;
   };
 
   try {
@@ -180,6 +190,7 @@ export async function runAgentTask(
       systemPrompt: SYSTEM_PROMPT,
       mcpServers: { capybara: mcp },
       allowedTools: ALLOWED_TOOLS,
+      disallowedTools: DISALLOWED_TOOLS,
       ...(claudeBinary ? { pathToClaudeCodeExecutable: claudeBinary } : {}),
       ...(resumeSessionId ? { resume: resumeSessionId } : {}),
       executable: app.isPackaged ? "bun" : "node",

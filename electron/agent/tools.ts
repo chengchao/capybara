@@ -37,10 +37,10 @@ async function runInSandbox(
   )) as RunResult;
 }
 
-function asToolResult(result: RunResult, emptyFallback = ""): ToolResult {
+function asToolResult(result: RunResult): ToolResult {
   if (result.exitCode === 0) {
     return {
-      content: [{ type: "text", text: result.stdout || emptyFallback }],
+      content: [{ type: "text", text: result.stdout }],
     };
   }
   const parts = [`[exit ${result.exitCode}]`];
@@ -52,15 +52,14 @@ function asToolResult(result: RunResult, emptyFallback = ""): ToolResult {
   };
 }
 
-// Bash single-quote escape: close the quote, insert escaped quote, reopen.
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`;
-}
-
 // `resolveSession` returns the VM sandbox session id for the current
 // conversation, creating it on first use. It's a thunk (not a plain string)
 // because for a new conversation the id isn't known until the SDK emits its
 // `init` message — which always precedes the first tool call.
+//
+// Only Bash routes through the VM. Read/Glob/Write are the SDK's built-in
+// tools running natively in the agent subprocess on the host (enabled via
+// `allowedTools` in runTask.ts), so they aren't defined here.
 export function buildTools(supervisor: SupervisorClient, resolveSession: () => Promise<string>) {
   const bash = tool(
     "Bash",
@@ -88,45 +87,5 @@ export function buildTools(supervisor: SupervisorClient, resolveSession: () => P
     },
   );
 
-  const read = tool(
-    "Read",
-    "Read the contents of a file inside the Capybara sandbox. Returns the file's text.",
-    {
-      file_path: z.string().describe("Absolute path to the file inside the sandbox."),
-    },
-    async (args) => {
-      const sessionId = await resolveSession();
-      const result = await runInSandbox(
-        supervisor,
-        sessionId,
-        `cat -- ${shellQuote(args.file_path)}`,
-      );
-      return asToolResult(result, "(empty file)");
-    },
-  );
-
-  const glob = tool(
-    "Glob",
-    "Find files matching a glob pattern inside the Capybara sandbox. Returns matching paths, one per line. Supports `**` for recursive matching.",
-    {
-      pattern: z.string().describe("Glob pattern (e.g. **/*.py or src/*.ts)."),
-      path: z
-        .string()
-        .optional()
-        .describe(
-          "Directory to search under (must be inside the sandbox). Defaults to /workspace.",
-        ),
-    },
-    async (args) => {
-      const sessionId = await resolveSession();
-      const root = args.path ?? "/workspace";
-      // bash globstar + nullglob: `**` matches recursively, no-match expands
-      // to nothing instead of literal pattern text.
-      const cmd = `shopt -s globstar nullglob; cd ${shellQuote(root)} && for f in ${args.pattern}; do printf "%s\\n" "$f"; done`;
-      const result = await runInSandbox(supervisor, sessionId, cmd);
-      return asToolResult(result, "(no matches)");
-    },
-  );
-
-  return [bash, read, glob];
+  return [bash];
 }
