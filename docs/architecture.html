@@ -373,6 +373,19 @@
               every tool call lands in the sandbox.
             </div>
           </div>
+          <div class="component boundary">
+            <div class="component-name">llmProxy.ts</div>
+            <div class="component-role">
+              Loopback HTTP proxy on <code>127.0.0.1:&lt;ephemeral&gt;</code>. Holds the real BYOK
+              key; hands the subprocess only a token. Swaps token → real key and forwards to
+              <code>api.anthropic.com</code>. The real key never enters the subprocess.
+            </div>
+            <ul class="component-list">
+              <li>token minted once at startup (app-session)</li>
+              <li>getApiKey() reads keychain (safeStorage)</li>
+              <li>x-api-key must equal token, else 401</li>
+            </ul>
+          </div>
         </div>
       </div>
 
@@ -403,6 +416,8 @@
             <ul class="component-list">
               <li>Spawned as <code>bun cli.js</code></li>
               <li>Bun bundled at <code>process.resourcesPath/bun</code></li>
+              <li>env: <code>ANTHROPIC_BASE_URL</code> → loopback proxy, <code>ANTHROPIC_API_KEY</code> = token</li>
+              <li>sibling auth vars unset (no inherited-cred ride-along)</li>
             </ul>
           </div>
         </div>
@@ -520,6 +535,16 @@
         </p>
       </div>
       <div class="note">
+        <h3>BYOK key custody</h3>
+        <p>
+          The real <code>ANTHROPIC_API_KEY</code> lives only in the OS keychain (Electron
+          <code>safeStorage</code>) and main's memory. The agent subprocess gets a loopback
+          <code>ANTHROPIC_BASE_URL</code> + an app-session token; <code>llmProxy.ts</code> swaps the
+          token for the real key on the way upstream. A compromised subprocess holds no reusable
+          credential and can only reach the one fixed upstream.
+        </p>
+      </div>
+      <div class="note">
         <h3>Three Bun roles</h3>
         <p>
           (1) Bun is the dev-tooling runtime: <code>bun install</code>, <code>bun build</code>. (2)
@@ -549,7 +574,13 @@
         </li>
         <li>
           <strong>SDK spawns the <code>claude</code> binary</strong> as a subprocess (under bundled
-          Bun). Sends prompt + tool defs.
+          Bun). Its env carries the loopback proxy's <code>ANTHROPIC_BASE_URL</code> + a token in
+          place of the real key. Sends prompt + tool defs.
+        </li>
+        <li>
+          <strong>Each LLM round-trip hits the loopback proxy</strong> (not Anthropic directly): the
+          proxy in main verifies the token, swaps in the real BYOK key from the keychain, and
+          forwards to <code>api.anthropic.com</code>. The subprocess never sees the real key.
         </li>
         <li>
           <strong>Claude emits an <code>assistant</code> message</strong>. If it contains a
@@ -635,13 +666,12 @@
           <strong>Session-only grants.</strong> Grants live in main's in-memory store and are gone
           when the conversation ends. Each new conversation starts empty and re-asks.
         </li>
-        <li>
-          <strong>BYOK key out of the agent process.</strong> A loopback LLM proxy in main injects
-          the real <code>ANTHROPIC_API_KEY</code>; the <code>claude</code> subprocess gets a
-          per-turn token and <code>ANTHROPIC_BASE_URL</code> pointing at the proxy. The token dies
-          with the process at end-of-turn — a compromised subprocess holds nothing reusable.
-        </li>
       </ol>
+      <p style="margin: 12px 0 0; color: var(--text-dim); font-size: 13px">
+        The BYOK-key-out-of-the-agent piece of this direction has already shipped (loopback LLM
+        proxy) and now lives in the current architecture above — see
+        <a href="llm-proxy.html" style="color: var(--accent)">llm-proxy.html</a>.
+      </p>
     </div>
 
     <div class="annotations" style="margin-top: 32px">
