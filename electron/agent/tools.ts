@@ -37,10 +37,10 @@ async function runInSandbox(
   )) as RunResult;
 }
 
-function asToolResult(result: RunResult, emptyFallback = ""): ToolResult {
+function asToolResult(result: RunResult): ToolResult {
   if (result.exitCode === 0) {
     return {
-      content: [{ type: "text", text: result.stdout || emptyFallback }],
+      content: [{ type: "text", text: result.stdout }],
     };
   }
   const parts = [`[exit ${result.exitCode}]`];
