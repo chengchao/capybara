@@ -9,11 +9,13 @@ import { getSupervisor } from "../vm";
 import { buildTools } from "./tools";
 
 const TOOL_PREFIX = "mcp__capybara__";
-const ALLOWED_TOOLS = ["Bash", "Read", "Glob"].map((name) => TOOL_PREFIX + name);
+// Bash routes through our in-process MCP server into the VM sandbox; Read,
+// Glob, and Write are the SDK's built-in tools running natively on the host.
+const ALLOWED_TOOLS = [TOOL_PREFIX + "Bash", "Read", "Glob", "Write"];
 
 const MODEL = process.env.CAPYBARA_AGENT_MODEL ?? "claude-sonnet-4-6";
 
-const SYSTEM_PROMPT = `You are Capybara, an office-work agent. Your tools (Bash, Read, Glob) execute inside a Lima VM sandbox; the working directory is /workspace, and connected host directories appear at /mnt/<name>. You cannot run commands on the host directly — everything routes through the sandbox.`;
+const SYSTEM_PROMPT = `You are Capybara, an office-work agent. Read, Glob, and Write operate directly on the host filesystem — use absolute paths. Bash runs inside a Lima VM sandbox, a separate filesystem where the working directory is /workspace and connected host directories appear at /mnt/<name>. Files you Read/Write on the host are not visible to Bash unless they fall under a connected directory, and vice versa.`;
 
 export type AgentEvent =
   | { event: "task_started"; taskId: string }
