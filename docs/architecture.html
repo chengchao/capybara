@@ -368,9 +368,10 @@
           <div class="component">
             <div class="component-name">agent/tools.ts</div>
             <div class="component-role">
-              In-process MCP server defining <code>Bash</code>, <code>Read</code>,
-              <code>Glob</code>. Each handler calls <code>SupervisorClient.run_as_session</code> —
-              every tool call lands in the sandbox.
+              In-process MCP server defining just <code>Bash</code>. Its handler calls
+              <code>SupervisorClient.run_as_session</code> — so bash lands in the VM sandbox.
+              <code>Read</code> / <code>Glob</code> / <code>Write</code> are SDK built-ins (Tier 3),
+              not defined here.
             </div>
           </div>
           <div class="component boundary">
@@ -420,10 +421,19 @@
               <li>sibling auth vars unset (no inherited-cred ride-along)</li>
             </ul>
           </div>
+          <div class="component boundary">
+            <div class="component-name">built-in file tools <small>(Read / Glob / Write)</small></div>
+            <div class="component-role">
+              The SDK's own tools, run <strong>inside this subprocess on the host</strong> — native
+              I/O on the user's real files, no round-trip to the VM. Bash is the only tool that
+              leaves for the sandbox. <strong>Not</strong> inside Tier 5: these read and write the
+              host filesystem directly, and are currently ungated (no path allow-list yet).
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="edge-label">↓ JSON-RPC over <code>limactl shell</code> stdio (line-delim)</div>
+      <div class="edge-label">↓ JSON-RPC over <code>limactl shell</code> stdio (line-delim) · <em>Bash only</em></div>
 
       <!-- VM -->
       <div class="tier tier-vm">
@@ -513,9 +523,11 @@
       <div class="note">
         <h3>Trust boundary</h3>
         <p>
-          Tier 5 is the security perimeter. The agent's LLM-decided commands cannot escape bwrap's
-          mount + PID namespace. Per-session Linux user is defense-in-depth under that boundary, not
-          the primary gate.
+          Tier 5 is the perimeter <em>for Bash</em>: LLM-decided shell commands cannot escape
+          bwrap's mount + PID namespace, and the per-session Linux user is defense-in-depth under
+          it. But the built-in file tools (Read/Glob/Write) run on the host outside this boundary
+          and are not yet path-gated — today they can touch any file the app can. Closing that gap
+          (the app-layer grant store) is the load-bearing TODO below.
         </p>
       </div>
       <div class="note">
@@ -527,11 +539,13 @@
         </p>
       </div>
       <div class="note">
-        <h3>Tool interception</h3>
+        <h3>Tool routing</h3>
         <p>
-          The SDK ships Bash/Read/Glob as built-in tools that would run on the host. Our in-process
-          MCP server shadows them by name (prefixed <code>mcp__capybara__*</code>); the SDK's
-          <code>allowedTools</code> allow-list keeps only ours, blocking the unsafe defaults.
+          Only <code>Bash</code> is shadowed by our in-process MCP server (prefixed
+          <code>mcp__capybara__Bash</code>) so it executes in the VM. <code>Read</code> /
+          <code>Glob</code> / <code>Write</code> are left as the SDK's built-ins, running natively in
+          the agent subprocess. The <code>allowedTools</code> list — <code>mcp__capybara__Bash</code>
+          plus the three bare built-in names — is what splits host I/O from sandboxed shell.
         </p>
       </div>
       <div class="note">
@@ -583,12 +597,14 @@
           forwards to <code>api.anthropic.com</code>. The subprocess never sees the real key.
         </li>
         <li>
-          <strong>Claude emits an <code>assistant</code> message</strong>. If it contains a
-          <code>tool_use</code> block (e.g. Bash), the SDK calls back into main's in-process MCP
-          handler.
+          <strong>Claude emits an <code>assistant</code> message</strong>. A
+          <code>Read</code>/<code>Glob</code>/<code>Write</code> <code>tool_use</code> runs
+          <em>in the subprocess</em> against the host filesystem and returns without touching main or
+          the VM. Only a <code>Bash</code> <code>tool_use</code> calls back into main's in-process MCP
+          handler — the steps below are that path.
         </li>
         <li>
-          <strong>Tool handler</strong> calls
+          <strong>Bash handler</strong> calls
           <code>supervisor.request("run_as_session", { command, … })</code> via the persistent
           SupervisorClient.
         </li>
@@ -634,11 +650,12 @@
           project.
         </li>
         <li>
-          <strong>Built-in file tools on host.</strong> Keep
-          <code>Read</code>/<code>Write</code>/<code>Edit</code>/<code>Glob</code>/<code>Grep</code>
-          as SDK built-ins running in the agent process — native I/O on the user's files, no
-          copy-through.
-          <code>Bash</code> is no longer in the host's allowed-tool set.
+          <strong>Built-in file tools on host. ◑ Partly shipped.</strong>
+          <code>Read</code>/<code>Glob</code>/<code>Write</code> now run as SDK built-ins in the agent
+          process — native I/O on the user's files, no copy-through (the built-in host
+          <code>Bash</code> stays disallowed; our VM-routed Bash is the only shell). Reflected in the
+          current architecture above. Still to add: <code>Edit</code>/<code>Grep</code>, and the path
+          gating in items 4–6 — until that lands these tools are ungated on the host.
         </li>
         <li>
           <strong>Spawn the agent per turn.</strong> On each user message, Electron main spawns the
