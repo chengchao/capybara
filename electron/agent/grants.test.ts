@@ -82,6 +82,17 @@ test("a Glob pattern cannot escape the granted path", () => {
   expect(globP("/data", "/etc/**")).toMatchObject({ deny: true });
 });
 
+test("brace expansion cannot smuggle a traversal past the pattern check", () => {
+  grantDirectory(S, "/data");
+  // Legitimate braces still work.
+  expect(globP("/data", "**/*.{js,ts}")).toEqual({ allow: true });
+  expect(globP("/data", "{src,test}/**")).toEqual({ allow: true });
+  // A `..` or absolute branch hidden in a brace is rejected.
+  expect(globP("/data", "{..,x}/secret/*")).toMatchObject({ deny: true });
+  expect(globP("/data", "{/etc,x}/*")).toMatchObject({ deny: true });
+  expect(globP("/data", "a/{..,y}/z")).toMatchObject({ deny: true });
+});
+
 test("NotebookEdit is gated on its notebook_path", () => {
   grantDirectory(S, "/data");
   expect(notebook("/data/x.ipynb")).toEqual({ allow: true });

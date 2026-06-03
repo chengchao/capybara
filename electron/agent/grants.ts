@@ -48,11 +48,18 @@ function within(candidate: string, dir: string): boolean {
   return candidate.startsWith(prefix);
 }
 
-// A Glob/Grep pattern escapes its search root if it's absolute or steps up `..`.
+// A Glob/Grep pattern reaches outside its search root if it — or any brace
+// alternative — is absolute or contains a `..` segment. Braces concatenate with
+// surrounding text, so `{..,x}/y` → `../y` and `{/etc,x}/*` → `/etc/*` must be
+// caught, not just a leading `/` or top-level `..`. We treat `{ } ,` as
+// alternative boundaries: flag an absolute branch (a separator at string start
+// or right after `{`/`,`) or a `..` token in any branch. Conservative by design
+// — a contrived pattern like `a{..,b}c` is rejected though it wouldn't actually
+// escape — because over-deny is the safe direction.
 function patternEscapes(pattern: unknown): boolean {
   if (typeof pattern !== "string") return false;
-  if (path.isAbsolute(pattern)) return true;
-  return pattern.split(/[/\\]/).includes("..");
+  if (/(^|[{,])[/\\]/.test(pattern)) return true;
+  return pattern.split(/[/\\{},]/).includes("..");
 }
 
 // Returns true if the grant was stored. False means the path wasn't an absolute
