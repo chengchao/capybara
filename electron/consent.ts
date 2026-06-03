@@ -1,10 +1,12 @@
-import { BrowserWindow, dialog } from "electron";
+import { app, BrowserWindow, dialog } from "electron";
 
 // Native Allow/Deny dialog for a host folder-access request; returns true on
 // Allow. CAPYBARA_AUTO_CONSENT=1 auto-approves — the dialog is a native OS modal
 // that headless e2e (CDP) can't click, so the flag drives the allow path there.
+// Dev-only: fenced behind `!app.isPackaged` so it can't disable consent in a
+// shipped build.
 export async function requestDirectoryConsent(p: string): Promise<boolean> {
-  if (process.env.CAPYBARA_AUTO_CONSENT === "1") return true;
+  if (!app.isPackaged && process.env.CAPYBARA_AUTO_CONSENT === "1") return true;
   const opts = {
     type: "question" as const,
     message: `Capybara wants to access ${p}`,

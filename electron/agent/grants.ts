@@ -8,17 +8,26 @@ import path from "node:path";
 // conversation gets a fresh (empty) key and re-asks.
 const store = new Map<string, string[]>();
 
-// Built-in host file tools we gate, mapped to the input field holding the target
-// path. Bare names on purpose: built-ins arrive unprefixed, while our MCP tools
-// (`Bash`, `request_capybara_directory`) arrive as `mcp__capybara__*` and so are
-// absent here — the early return below lets them through ungated.
+// Host file built-ins we gate, mapped to the input field holding the target
+// path. Deliberately a SUPERSET of what runTask exposes (see BUILTIN_TOOLS): the
+// availability allowlist and this path-gate are independent layers, so any host
+// tool later added to BUILTIN_TOOLS is already gated here — no whack-a-mole.
+// Bare names: built-ins arrive unprefixed; our MCP tools (`Bash`,
+// `request_capybara_directory`) arrive as `mcp__capybara__*` and so are absent
+// here — the early return lets them through.
 const GATED: Record<string, string> = {
   Read: "file_path",
   Write: "file_path",
   Edit: "file_path",
   Glob: "path",
   Grep: "path",
+  NotebookEdit: "notebook_path",
 };
+
+// Glob/Grep resolve `pattern` relative to the gated `path`, so a pattern can walk
+// out of a connected directory even when `path` is inside one. Their patterns
+// must stay relative and `..`-free.
+const PATTERN_TOOLS = new Set(["Glob", "Grep"]);
 
 // Expand a leading `~`, require an absolute path, collapse `..`. Returns null for
 // a falsy or non-absolute input (the model is instructed to use absolute paths).
@@ -31,17 +40,30 @@ function normalize(p: unknown): string | null {
   return path.resolve(expanded);
 }
 
-// `+ path.sep` guard: `/foo/barbaz` must not match a grant of `/foo/bar`.
+// `+ path.sep` guard: `/foo/barbaz` must not match a grant of `/foo/bar`. The
+// root grant `/` already ends in a separator, so don't double it.
 function within(candidate: string, dir: string): boolean {
-  return candidate === dir || candidate.startsWith(dir + path.sep);
+  if (candidate === dir) return true;
+  const prefix = dir.endsWith(path.sep) ? dir : dir + path.sep;
+  return candidate.startsWith(prefix);
 }
 
-export function grantDirectory(sessionId: string, dir: string): void {
+// A Glob/Grep pattern escapes its search root if it's absolute or steps up `..`.
+function patternEscapes(pattern: unknown): boolean {
+  if (typeof pattern !== "string") return false;
+  if (path.isAbsolute(pattern)) return true;
+  return pattern.split(/[/\\]/).includes("..");
+}
+
+// Returns true if the grant was stored. False means the path wasn't an absolute
+// directory and nothing was recorded — the caller must not claim success.
+export function grantDirectory(sessionId: string, dir: string): boolean {
   const norm = normalize(dir);
-  if (!norm) return;
+  if (!norm) return false;
   const dirs = store.get(sessionId) ?? [];
   if (!dirs.includes(norm)) dirs.push(norm);
   store.set(sessionId, dirs);
+  return true;
 }
 
 export function evaluateFileTool(
@@ -52,8 +74,8 @@ export function evaluateFileTool(
   const field = GATED[toolName];
   if (!field) return { allow: true };
 
-  const raw = (toolInput as Record<string, unknown> | null | undefined)?.[field];
-  const candidate = normalize(raw);
+  const input = (toolInput ?? {}) as Record<string, unknown>;
+  const candidate = normalize(input[field]);
   if (!candidate) {
     return {
       deny: true,
@@ -62,13 +84,22 @@ export function evaluateFileTool(
   }
 
   const dirs = store.get(sessionId) ?? [];
-  if (dirs.some((d) => within(candidate, d))) return { allow: true };
+  if (!dirs.some((d) => within(candidate, d))) {
+    // Suggest granting the containing directory (dirname for a file target; the
+    // path itself for a Glob/Grep directory target).
+    const suggested = field === "path" ? candidate : path.dirname(candidate);
+    return {
+      deny: true,
+      reason: `Path "${candidate}" is not connected. Call request_capybara_directory({ path: "${suggested}" }) to request access, then retry.`,
+    };
+  }
 
-  // Suggest granting the containing directory (dirname for a file target; the
-  // path itself for a Glob/Grep directory target).
-  const suggested = field === "file_path" ? path.dirname(candidate) : candidate;
-  return {
-    deny: true,
-    reason: `Path "${candidate}" is not connected. Call request_capybara_directory({ path: "${suggested}" }) to request access, then retry.`,
-  };
+  if (PATTERN_TOOLS.has(toolName) && patternEscapes(input.pattern)) {
+    return {
+      deny: true,
+      reason: `${toolName} pattern "${String(input.pattern)}" may reach outside the connected directory "${candidate}". Use a pattern relative to it, with no leading "/" and no "..".`,
+    };
+  }
+
+  return { allow: true };
 }

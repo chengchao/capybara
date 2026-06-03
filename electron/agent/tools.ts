@@ -112,7 +112,19 @@ export function buildTools(
           isError: true,
         };
       }
-      grantDirectory(getSdkSessionId(), args.path);
+      // grantDirectory only stores an absolute directory path; if it didn't, say
+      // so instead of falsely reporting success (which would loop the retry).
+      if (!grantDirectory(getSdkSessionId(), args.path)) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Could not grant "${args.path}" — pass an absolute directory path (e.g. /Users/you/project), then retry.`,
+            },
+          ],
+          isError: true,
+        };
+      }
       return {
         content: [
           { type: "text", text: `Granted access to ${args.path}. Retry your file operation.` },

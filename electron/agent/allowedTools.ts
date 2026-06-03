@@ -19,3 +19,11 @@ export const ALLOWED_TOOLS = [
 // the VM. Verified by running the app: dropping this lets `uname -s` return the
 // host's `Darwin` with zero `run_as_session` calls to the supervisor.
 export const DISALLOWED_TOOLS = ["Bash"];
+
+// The exact host built-ins the model may use, passed as the SDK `tools` option.
+// This is an AVAILABILITY allowlist: every other built-in (NotebookEdit, Edit,
+// Grep, WebFetch, the built-in Bash, ...) is removed from the model's context,
+// so a host-touching built-in we forgot to path-gate simply can't be reached —
+// default-deny rather than disallowing them one by one. (MCP tools are
+// unaffected by `tools`, so `mcp__capybara__*` still work.)
+export const BUILTIN_TOOLS = ["Read", "Glob", "Write"];

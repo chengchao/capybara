@@ -6,7 +6,7 @@ import { app } from "electron";
 import { getLlmProxy } from "../llmProxy";
 import { getAnthropicApiKey, hasStoredApiKey } from "../settings";
 import { getSupervisor } from "../vm";
-import { ALLOWED_TOOLS, DISALLOWED_TOOLS, TOOL_PREFIX } from "./allowedTools";
+import { ALLOWED_TOOLS, BUILTIN_TOOLS, DISALLOWED_TOOLS, TOOL_PREFIX } from "./allowedTools";
 import { evaluateFileTool } from "./grants";
 import { buildTools } from "./tools";
 
@@ -174,7 +174,11 @@ export async function runAgentTask(
   try {
     const mcp = createSdkMcpServer({
       name: "capybara",
-      tools: buildTools(supervisor, resolveSession, () => sessionId ?? ""),
+      tools: buildTools(supervisor, resolveSession, () => {
+        if (!sessionId)
+          throw new Error("folder grant requested before the SDK session was initialized");
+        return sessionId;
+      }),
     });
     ensureBundledBunOnPath();
     const claudeBinary = resolveClaudeBinary();
@@ -190,6 +194,11 @@ export async function runAgentTask(
       model: MODEL,
       systemPrompt: SYSTEM_PROMPT,
       mcpServers: { capybara: mcp },
+      // Availability: only these host built-ins exist for the model; every other
+      // built-in (NotebookEdit, Grep, WebFetch, built-in Bash, ...) is removed,
+      // so an ungated host-filesystem tool can't be reached. `allowedTools`
+      // auto-approves them + the MCP tools; `disallowedTools` is belt-and-braces.
+      tools: BUILTIN_TOOLS,
       allowedTools: ALLOWED_TOOLS,
       disallowedTools: DISALLOWED_TOOLS,
       // Gate the host file tools: deny any path the user hasn't connected, with

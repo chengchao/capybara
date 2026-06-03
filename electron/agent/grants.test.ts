@@ -16,6 +16,8 @@ beforeEach(() => {
 const read = (p: string) => evaluateFileTool(S, "Read", { file_path: p });
 const write = (p: string) => evaluateFileTool(S, "Write", { file_path: p });
 const glob = (p?: string) => evaluateFileTool(S, "Glob", p === undefined ? {} : { path: p });
+const globP = (p: string, pattern: string) => evaluateFileTool(S, "Glob", { path: p, pattern });
+const notebook = (p: string) => evaluateFileTool(S, "NotebookEdit", { notebook_path: p });
 
 test("ungranted path is denied with an actionable reason", () => {
   const r = read("/Users/x/Desktop/a.txt");
@@ -71,4 +73,28 @@ test("non-gated tools (MCP, consent) are never gated", () => {
   expect(
     evaluateFileTool(S, "mcp__capybara__request_capybara_directory", { path: "/anything" }),
   ).toEqual({ allow: true });
+});
+
+test("a Glob pattern cannot escape the granted path", () => {
+  grantDirectory(S, "/data");
+  expect(globP("/data", "**/*.txt")).toEqual({ allow: true });
+  expect(globP("/data", "../etc/*")).toMatchObject({ deny: true });
+  expect(globP("/data", "/etc/**")).toMatchObject({ deny: true });
+});
+
+test("NotebookEdit is gated on its notebook_path", () => {
+  grantDirectory(S, "/data");
+  expect(notebook("/data/x.ipynb")).toEqual({ allow: true });
+  expect(notebook("/other/x.ipynb")).toMatchObject({ deny: true });
+});
+
+test("granting the filesystem root covers all subpaths", () => {
+  grantDirectory(S, "/");
+  expect(read("/anything/deep/x")).toEqual({ allow: true });
+});
+
+test("grantDirectory reports whether it stored a grant", () => {
+  expect(grantDirectory(S, "/abs/dir")).toBe(true);
+  expect(grantDirectory(S, "relative/dir")).toBe(false);
+  expect(grantDirectory(S, "")).toBe(false);
 });
