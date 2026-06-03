@@ -431,8 +431,9 @@
             <div class="component-role">
               The SDK's own tools, run <strong>inside this subprocess on the host</strong> — native
               I/O on the user's real files, no round-trip to the VM. Bash is the only tool that
-              leaves for the sandbox. <strong>Not</strong> inside Tier 5: these read and write the
-              host filesystem directly, and are currently ungated (no path allow-list yet).
+              leaves for the sandbox. <strong>Not</strong> inside Tier 5: they read/write the host
+              directly, but are <strong>path-gated</strong> by main's <code>PreToolUse</code> hook —
+              only user-granted directories are reachable (see <code>grants.ts</code>).
             </div>
           </div>
         </div>
@@ -532,9 +533,10 @@
         <p>
           Tier 5 is the perimeter <em>for Bash</em>: LLM-decided shell commands cannot escape
           bwrap's mount + PID namespace, and the per-session Linux user is defense-in-depth under
-          it. But the built-in file tools (Read/Glob/Write) run on the host outside this boundary
-          and are not yet path-gated — today they can touch any file the app can. Closing that gap
-          (the app-layer grant store) is the load-bearing TODO below.
+          it. The built-in file tools (Read/Glob/Write) run on the host outside this boundary, so a
+          second perimeter guards them: main's <code>PreToolUse</code> hook path-gates every call to
+          a user-granted directory, and the SDK <code>tools</code> allowlist removes every other
+          host built-in. Two boundaries — bwrap for shell, the grant store for host file I/O.
         </p>
       </div>
       <div class="note">
@@ -645,15 +647,16 @@
       <h3 style="color: var(--warn)">Proposed direction — host agent + VM bash</h3>
       <p style="margin: 0 0 12px; color: var(--text-dim); font-size: 13px">
         Where we're heading. The <em>tool placement</em> below (Bash in the VM, file tools on the
-        host) and the LLM proxy have already shipped and are folded into the current architecture
-        above — items are tagged where that's the case. What remains is the structural shift:
-        spawning the agent per turn (item 3) and the app-layer folder-grant consent flow (items
-        4–6). Full design:
-        <a href="host-agent-vm-bash.html" style="color: var(--accent)">host-agent-vm-bash.html</a>.
-        Related notes: <a href="llm-proxy.html" style="color: var(--accent)">llm-proxy.html</a> (the
-        host LLM proxy),
-        <a href="agent-in-vm.html" style="color: var(--accent)">agent-in-vm.html</a> (the heavier
-        full-agent-in-VM alternative).
+        host), the LLM proxy, and the app-layer folder-grant consent flow (items 4–6) have already
+        shipped and are folded into the current architecture above — items are tagged where that's
+        the case. The one piece that remains is the structural shift: spawning the agent per turn
+        (item 3). Full designs:
+        <a href="host-agent-vm-bash.html" style="color: var(--accent)">host-agent-vm-bash.html</a>
+        and <a href="path-gating.html" style="color: var(--accent)">path-gating.html</a> (the
+        shipped folder permissions). Related notes:
+        <a href="llm-proxy.html" style="color: var(--accent)">llm-proxy.html</a> (the host LLM
+        proxy), <a href="agent-in-vm.html" style="color: var(--accent)">agent-in-vm.html</a> (the
+        heavier full-agent-in-VM alternative).
       </p>
       <ol>
         <li>
@@ -668,8 +671,9 @@
           agent process — native I/O on the user's files, no copy-through (the built-in host
           <code>Bash</code> is explicitly blocked via <code>disallowedTools</code> — allow-listing
           alone leaves it runnable — so our VM-routed Bash is the only shell). Reflected in the
-          current architecture above. Still to add: <code>Edit</code>/<code>Grep</code>, and the
-          path gating in items 4–6 — until that lands these tools are ungated on the host.
+          current architecture above, and now <strong>path-gated</strong> by items 4–6 (a granted
+          host directory is required per call). Availability is default-denied to exactly these
+          built-ins via the SDK <code>tools</code> option, so no other host tool is reachable.
         </li>
         <li>
           <strong>Spawn the agent per turn.</strong> On each user message, Electron main spawns the
@@ -682,20 +686,24 @@
           app-layer (see below). Deliberate KISS-defer; OS sandbox is in the future-hardening list.
         </li>
         <li>
-          <strong>App-layer folder permissions.</strong> A <code>PreToolUse</code> hook in main
-          gates each built-in file-tool call against an in-memory session grant store. Non-granted
-          paths are denied with a structured reason that names the path and points at the consent
-          tool.
+          <strong>App-layer folder permissions. ✓ Shipped.</strong> A <code>PreToolUse</code> hook
+          in main gates each built-in file-tool call against an in-memory session grant store
+          (<code>grants.ts</code>). Non-granted paths are denied with a structured reason that names
+          the path and points at the consent tool. See
+          <a href="path-gating.html" style="color: var(--accent)">path-gating.html</a>.
         </li>
         <li>
-          <strong>Agent-driven consent (deny → request → retry).</strong> On a deny, the model calls
-          <code>request_capybara_directory({ path, mode })</code> — a custom MCP tool. Main shows a
-          native dialog; on <em>Allow</em>, the grant is added to the in-memory store. The model
-          retries; the <code>PreToolUse</code> hook now allows; the built-in tool runs natively.
+          <strong>Agent-driven consent (deny → request → retry). ✓ Shipped.</strong> On a deny, the
+          model calls <code>request_capybara_directory({ path })</code> — a custom MCP tool. Main
+          shows a native Allow/Deny dialog; on <em>Allow</em>, the directory is added to the
+          in-memory store. The model retries; the <code>PreToolUse</code> hook now allows; the
+          built-in tool runs natively. (One unified access level — a granted dir covers read and
+          write alike.)
         </li>
         <li>
-          <strong>Session-only grants.</strong> Grants live in main's in-memory store and are gone
-          when the conversation ends. Each new conversation starts empty and re-asks.
+          <strong>Session-only grants. ✓ Shipped.</strong> Grants live in main's in-memory store,
+          keyed by the SDK session id, and are gone when the app process exits. Each new
+          conversation starts empty and re-asks.
         </li>
       </ol>
       <p style="margin: 12px 0 0; color: var(--text-dim); font-size: 13px">
@@ -721,11 +729,12 @@
         <h3 style="color: var(--warn)">What's deferred</h3>
         <p>
           Per <code>AGENTS.md</code> KISS: no <code>srt</code> around the agent on host yet — the
-          grant store + <code>PreToolUse</code> hook is the load-bearing layer, and <code>srt</code>
-          would be OS-level defense-in-depth for the compromised-process case. Also out of MVP: an
-          <code>srt</code>-in-VM egress allowlist around bash invocations (closes the open-NAT exfil
-          path), and per-session UID/bwrap isolation inside the VM. The agent-in-VM alternative is
-          tracked separately in
+          now-shipped grant store + <code>PreToolUse</code> hook is the load-bearing layer, and
+          <code>srt</code> would be OS-level defense-in-depth for the compromised-process case. The
+          grant check also defers symlink/realpath resolution (a documented gap). Also out of MVP:
+          an <code>srt</code>-in-VM egress allowlist around bash invocations (closes the open-NAT
+          exfil path), and per-session UID/bwrap isolation inside the VM. The agent-in-VM
+          alternative is tracked separately in
           <a href="agent-in-vm.html" style="color: var(--accent)">agent-in-vm.html</a>.
         </p>
       </div>
