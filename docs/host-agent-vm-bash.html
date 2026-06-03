@@ -451,8 +451,9 @@
             <strong>Agent-driven, two-step.</strong>
             Built-in tools on a non-connected path are <em>denied</em> by a
             <code>PreToolUse</code> hook in main with a structured reason. The model calls
-            <code>request_capybara_directory(path, mode)</code> (MCP); main shows a native dialog;
-            on approval the grant store is updated and the model retries.
+            <code>request_capybara_directory(path)</code> (MCP); main shows a native dialog; on
+            approval the directory is added to the grant store and the model retries. One unified
+            access level — a granted directory covers read and write alike.
           </p>
           <div class="label">Grants</div>
           <p class="val">
@@ -654,8 +655,8 @@
               hook returns
               <code
                 >{ permissionDecision: "deny", permissionDecisionReason: "Path \"~/Desktop\" is not
-                connected. Call request_capybara_directory({ path: \"~/Desktop\", mode: \"read\" })
-                to request access, then retry." }</code
+                connected. Call request_capybara_directory({ path: \"~/Desktop\" }) to request
+                access, then retry." }</code
               >. The model sees the reason as the tool result. <em>No UI appears at this step.</em>
             </div>
           </li>
@@ -665,9 +666,9 @@
             </div>
             <div class="desc">
               Per the deny hint, the model calls the MCP tool
-              <code>request_capybara_directory({ path: "~/Desktop", mode: "read" })</code>. Often
-              the model also explains in conversation:
-              <em>"I'll request read access to your Desktop so I can list the images."</em>
+              <code>request_capybara_directory({ path: "~/Desktop" })</code>. Often the model also
+              explains in conversation:
+              <em>"I'll request access to your Desktop so I can list the images."</em>
             </div>
           </li>
           <li>
@@ -676,9 +677,9 @@
             </div>
             <div class="desc">
               The MCP handler in the agent forwards to main; main shows a native dialog (<em
-                >"Capybara wants to read ~/Desktop — Allow / Deny."</em
-              >). On <em>Allow</em>: main adds the path + mode to the in-memory grant store. The MCP
-              tool returns <code>granted</code>.
+                >"Capybara wants to access ~/Desktop — Allow / Deny."</em
+              >). On <em>Allow</em>: main adds the path to the in-memory grant store. The MCP tool
+              returns <code>granted</code>.
             </div>
           </li>
           <li>

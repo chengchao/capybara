@@ -666,14 +666,16 @@
           delta is cosmetic — folding it under the per-turn restructure below.
         </li>
         <li>
-          <strong>Built-in file tools on host. ◑ Partly shipped.</strong>
-          <code>Read</code>/<code>Glob</code>/<code>Write</code> now run as SDK built-ins in the
-          agent process — native I/O on the user's files, no copy-through (the built-in host
+          <strong>Built-in file tools on host. ✓ Shipped.</strong>
+          <code>Read</code>/<code>Glob</code>/<code>Write</code> run as SDK built-ins in the agent
+          process — native I/O on the user's files, no copy-through (the built-in host
           <code>Bash</code> is explicitly blocked via <code>disallowedTools</code> — allow-listing
           alone leaves it runnable — so our VM-routed Bash is the only shell). Reflected in the
-          current architecture above, and now <strong>path-gated</strong> by items 4–6 (a granted
-          host directory is required per call). Availability is default-denied to exactly these
-          built-ins via the SDK <code>tools</code> option, so no other host tool is reachable.
+          current architecture above, and <strong>path-gated</strong> by items 4–6 (a granted host
+          directory is required per call). Availability is default-denied to exactly these built-ins
+          via the SDK <code>tools</code> option, so no other host tool is reachable.
+          <code>Edit</code>/<code>Grep</code> stay off until needed — adding them is a one-line
+          allow-list change, and the gate already covers them.
         </li>
         <li>
           <strong>Spawn the agent per turn.</strong> On each user message, Electron main spawns the
