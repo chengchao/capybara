@@ -1,0 +1,1342 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Capybara — UI mockup</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #080b12;
+        --rail: #0c111b;
+        --panel: #111826;
+        --panel-2: #161f30;
+        --panel-3: #1c273b;
+        --border: #232f45;
+        --border-soft: #1a2335;
+        --hair: rgba(255, 255, 255, 0.06);
+
+        --text: #e8edf6;
+        --dim: #8c95a8;
+        --faint: #5a6377;
+
+        --amber: #f2b15a; /* Capybara · agent · primary */
+        --amber-2: #ffcd86;
+        --amber-soft: rgba(242, 177, 90, 0.14);
+        --amber-line: rgba(242, 177, 90, 0.4);
+
+        --host: #69b4ff; /* host filesystem */
+        --host-soft: rgba(105, 180, 255, 0.13);
+        --vm: #b18cff; /* sandboxed VM */
+        --vm-soft: rgba(177, 140, 255, 0.13);
+
+        --good: #5fd39a;
+        --danger: #ff6f6f;
+
+        --sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+        --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+      }
+      body {
+        font-family: var(--sans);
+        color: var(--text);
+        background:
+          radial-gradient(1200px 700px at 18% -8%, #1a2236 0%, transparent 55%),
+          radial-gradient(900px 600px at 110% 120%, #15202f 0%, transparent 50%), #05070c;
+        display: grid;
+        place-items: center;
+        padding: 34px;
+        -webkit-font-smoothing: antialiased;
+        font-size: 14px;
+      }
+      /* faint grain over the desktop backdrop */
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        opacity: 0.025;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      }
+
+      /* ───────── window ───────── */
+      .win {
+        width: min(1240px, 100%);
+        height: min(800px, calc(100vh - 68px));
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        box-shadow:
+          0 1px 0 rgba(255, 255, 255, 0.04) inset,
+          0 40px 90px -30px rgba(0, 0, 0, 0.8),
+          0 0 0 1px rgba(0, 0, 0, 0.5);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        animation: win 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+      }
+      @keyframes win {
+        from {
+          opacity: 0;
+          transform: translateY(14px) scale(0.992);
+        }
+      }
+
+      .titlebar {
+        height: 40px;
+        flex: none;
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: center;
+        padding: 0 14px;
+        background: linear-gradient(180deg, #0d1320, #0a0f19);
+        border-bottom: 1px solid var(--border-soft);
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      .lights {
+        display: flex;
+        gap: 8px;
+      }
+      .lights i {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        display: block;
+      }
+      .lights i:nth-child(1) {
+        background: #ff5f57;
+      }
+      .lights i:nth-child(2) {
+        background: #febc2e;
+      }
+      .lights i:nth-child(3) {
+        background: #28c840;
+      }
+      .title {
+        font-size: 12.5px;
+        color: var(--dim);
+        letter-spacing: 0.02em;
+        font-weight: 500;
+      }
+      .title b {
+        color: var(--text);
+        font-weight: 600;
+      }
+
+      .body {
+        flex: 1;
+        min-height: 0;
+        display: grid;
+        grid-template-columns: 244px 1fr 300px;
+      }
+
+      /* ───────── left rail ───────── */
+      .rail {
+        background: var(--rail);
+        border-right: 1px solid var(--border-soft);
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 16px 16px 12px;
+      }
+      .mark {
+        width: 30px;
+        height: 30px;
+        border-radius: 9px;
+        background: linear-gradient(160deg, var(--amber-2), #d9913f);
+        display: grid;
+        place-items: center;
+        box-shadow: 0 4px 14px -4px rgba(242, 177, 90, 0.5);
+        flex: none;
+      }
+      .mark svg {
+        width: 20px;
+        height: 18px;
+        display: block;
+      }
+      .brand .name {
+        font-weight: 600;
+        font-size: 15px;
+        letter-spacing: -0.01em;
+        line-height: 1;
+      }
+      .brand .sub {
+        font-size: 10.5px;
+        color: var(--faint);
+        font-family: var(--mono);
+        letter-spacing: 0.04em;
+        margin-top: 3px;
+      }
+
+      .newbtn {
+        margin: 4px 12px 10px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 12px;
+        border-radius: 9px;
+        background: var(--amber-soft);
+        border: 1px solid var(--amber-line);
+        color: var(--amber-2);
+        font-weight: 550;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      .newbtn .kbd {
+        margin-left: auto;
+      }
+      .kbd {
+        font-family: var(--mono);
+        font-size: 10.5px;
+        color: var(--faint);
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid var(--hair);
+        border-radius: 5px;
+        padding: 1px 5px;
+      }
+      .search {
+        margin: 0 12px 14px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 10px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid var(--border-soft);
+        color: var(--faint);
+        font-size: 12.5px;
+      }
+      .search .kbd {
+        margin-left: auto;
+      }
+
+      .rail-label {
+        padding: 4px 18px;
+        font-size: 10.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.13em;
+        color: var(--faint);
+        font-weight: 600;
+      }
+      .convos {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+        padding: 2px 8px;
+      }
+      .convo {
+        padding: 9px 11px;
+        border-radius: 9px;
+        cursor: pointer;
+        display: block;
+        position: relative;
+        margin-bottom: 1px;
+      }
+      .convo:hover {
+        background: rgba(255, 255, 255, 0.03);
+      }
+      .convo.active {
+        background: var(--amber-soft);
+      }
+      .convo.active::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 9px;
+        bottom: 9px;
+        width: 2.5px;
+        border-radius: 2px;
+        background: var(--amber);
+      }
+      .convo .ct {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+      }
+      .convo .title-t {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .convo.active .title-t {
+        color: var(--amber-2);
+      }
+      .convo .time {
+        margin-left: auto;
+        font-size: 10.5px;
+        color: var(--faint);
+        flex: none;
+      }
+      .convo .snip {
+        font-size: 11.5px;
+        color: var(--dim);
+        margin-top: 3px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .convo .snip .run {
+        color: var(--vm);
+      }
+      .dot-mini {
+        display: inline-block;
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: var(--good);
+        margin-right: 5px;
+        vertical-align: middle;
+      }
+
+      .rail-foot {
+        border-top: 1px solid var(--border-soft);
+        padding: 10px 14px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 12px;
+        color: var(--dim);
+      }
+      .avatar-sm {
+        width: 24px;
+        height: 24px;
+        border-radius: 7px;
+        background: var(--panel-2);
+        border: 1px solid var(--border);
+        display: grid;
+        place-items: center;
+        font-size: 12px;
+      }
+      .vm-mini {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11.5px;
+        color: var(--dim);
+      }
+
+      /* ───────── center ───────── */
+      .main {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        background: linear-gradient(180deg, #0a0e17, var(--bg));
+      }
+      .main-head {
+        flex: none;
+        height: 52px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 20px;
+        border-bottom: 1px solid var(--border-soft);
+      }
+      .main-head .h-title {
+        font-weight: 600;
+        font-size: 14.5px;
+        letter-spacing: -0.01em;
+      }
+      .main-head .h-sub {
+        font-size: 11.5px;
+        color: var(--faint);
+        font-family: var(--mono);
+      }
+      .iconbtn {
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        border: 1px solid var(--border-soft);
+        background: rgba(255, 255, 255, 0.02);
+        color: var(--dim);
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+      }
+      .iconbtn:hover {
+        color: var(--text);
+        border-color: var(--border);
+      }
+
+      .scroll {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+        padding: 22px 28px 10px;
+      }
+      .scroll::-webkit-scrollbar {
+        width: 10px;
+      }
+      .scroll::-webkit-scrollbar-thumb {
+        background: #1c2840;
+        border-radius: 8px;
+        border: 3px solid transparent;
+        background-clip: padding-box;
+      }
+
+      .stream {
+        max-width: 720px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+      .msg {
+        animation: rise 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+      }
+      .msg:nth-child(1) {
+        animation-delay: 0.05s;
+      }
+      .msg:nth-child(2) {
+        animation-delay: 0.11s;
+      }
+      .msg:nth-child(3) {
+        animation-delay: 0.17s;
+      }
+      .msg:nth-child(4) {
+        animation-delay: 0.23s;
+      }
+      .msg:nth-child(5) {
+        animation-delay: 0.29s;
+      }
+      .msg:nth-child(6) {
+        animation-delay: 0.35s;
+      }
+      .msg:nth-child(7) {
+        animation-delay: 0.41s;
+      }
+      @keyframes rise {
+        from {
+          opacity: 0;
+          transform: translateY(9px);
+        }
+      }
+
+      /* service line (Telegram-style) */
+      .service {
+        text-align: center;
+        position: relative;
+      }
+      .service span {
+        font-size: 11px;
+        color: var(--faint);
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid var(--border-soft);
+        padding: 3px 12px;
+        border-radius: 999px;
+        font-family: var(--mono);
+        letter-spacing: 0.02em;
+      }
+      .service span b {
+        color: var(--dim);
+        font-weight: 500;
+      }
+
+      /* user bubble */
+      .user {
+        display: flex;
+        justify-content: flex-end;
+      }
+      .user .bubble {
+        max-width: 78%;
+        background: var(--amber-soft);
+        border: 1px solid var(--amber-line);
+        color: #fbe9cd;
+        padding: 9px 14px;
+        border-radius: 14px 14px 4px 14px;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      /* assistant turn */
+      .turn {
+        display: flex;
+        gap: 12px;
+      }
+      .av {
+        width: 30px;
+        height: 30px;
+        border-radius: 9px;
+        flex: none;
+        background: linear-gradient(160deg, #2a2030, #1a1622);
+        border: 1px solid var(--amber-line);
+        display: grid;
+        place-items: center;
+        margin-top: 1px;
+      }
+      .av svg {
+        width: 19px;
+        height: 17px;
+      }
+      .turn-main {
+        min-width: 0;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+      }
+      .who {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+      }
+      .who .nm {
+        font-weight: 600;
+        font-size: 13.5px;
+        color: var(--amber-2);
+      }
+      .who .tm {
+        font-size: 11px;
+        color: var(--faint);
+        font-family: var(--mono);
+      }
+      .prose {
+        font-size: 14px;
+        line-height: 1.62;
+        color: #d8deea;
+      }
+      .prose strong {
+        color: var(--text);
+        font-weight: 600;
+      }
+      .prose code {
+        font-family: var(--mono);
+        font-size: 12.5px;
+        background: rgba(255, 255, 255, 0.05);
+        padding: 1px 5px;
+        border-radius: 4px;
+        color: #e9d3ad;
+      }
+
+      /* tool card */
+      .tool {
+        border: 1px solid var(--border);
+        border-radius: 11px;
+        background: var(--panel);
+        overflow: hidden;
+      }
+      .tool-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        cursor: pointer;
+      }
+      .tool-head:hover {
+        background: rgba(255, 255, 255, 0.015);
+      }
+      .chev {
+        color: var(--faint);
+        font-size: 10px;
+        width: 10px;
+      }
+      .tname {
+        font-family: var(--mono);
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--text);
+      }
+      .targ {
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--dim);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0;
+      }
+      .spacer {
+        margin-left: auto;
+      }
+      .badge {
+        font-family: var(--mono);
+        font-size: 9.5px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        padding: 2px 7px;
+        border-radius: 5px;
+        flex: none;
+      }
+      .badge.host {
+        color: var(--host);
+        background: var(--host-soft);
+        border: 1px solid rgba(105, 180, 255, 0.3);
+      }
+      .badge.vm {
+        color: var(--vm);
+        background: var(--vm-soft);
+        border: 1px solid rgba(177, 140, 255, 0.3);
+      }
+      .tstatus {
+        font-size: 11.5px;
+        font-family: var(--mono);
+        color: var(--faint);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex: none;
+      }
+      .tstatus.done {
+        color: var(--good);
+      }
+      .tool-body {
+        border-top: 1px solid var(--border-soft);
+        padding: 11px 13px;
+        background: #0b1019;
+        font-family: var(--mono);
+        font-size: 12px;
+        line-height: 1.7;
+        color: #9fb0c8;
+        overflow-x: auto;
+      }
+      .tool-body .g {
+        color: var(--faint);
+      }
+      .tool-body .ok {
+        color: var(--good);
+      }
+
+      /* spinner */
+      .spin {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        border: 2px solid rgba(177, 140, 255, 0.25);
+        border-top-color: var(--vm);
+        animation: spin 0.7s linear infinite;
+        flex: none;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* consent — inline keyboard */
+      .consent {
+        border: 1px solid var(--amber-line);
+        border-radius: 12px;
+        background: linear-gradient(180deg, rgba(242, 177, 90, 0.07), var(--panel-2));
+        padding: 13px 14px 12px;
+      }
+      .consent .ctop {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .consent .lock {
+        width: 26px;
+        height: 26px;
+        border-radius: 8px;
+        background: var(--amber-soft);
+        border: 1px solid var(--amber-line);
+        display: grid;
+        place-items: center;
+        color: var(--amber-2);
+        flex: none;
+      }
+      .consent .ctitle {
+        font-size: 13.5px;
+        font-weight: 550;
+        color: var(--text);
+      }
+      .consent .ctitle b {
+        font-family: var(--mono);
+        color: var(--amber-2);
+        font-weight: 600;
+      }
+      .consent .cmeta {
+        font-size: 11.5px;
+        color: var(--dim);
+        margin: 7px 0 11px 36px;
+      }
+      .consent .btns {
+        display: flex;
+        gap: 8px;
+      }
+      .cbtn {
+        flex: 1;
+        height: 34px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+      }
+      .cbtn.deny {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid var(--border);
+        color: var(--dim);
+      }
+      .cbtn.deny:hover {
+        color: var(--text);
+      }
+      .cbtn.allow {
+        background: linear-gradient(180deg, var(--amber-2), var(--amber));
+        border: 1px solid var(--amber-2);
+        color: #2a1c08;
+        box-shadow: 0 4px 14px -5px rgba(242, 177, 90, 0.6);
+      }
+
+      /* working indicator */
+      .working {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--dim);
+        font-size: 13px;
+        padding-left: 42px;
+      }
+      .working .dots {
+        display: inline-flex;
+        gap: 4px;
+      }
+      .working .dots i {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: var(--amber);
+        animation: bob 1.2s ease-in-out infinite;
+      }
+      .working .dots i:nth-child(2) {
+        animation-delay: 0.15s;
+      }
+      .working .dots i:nth-child(3) {
+        animation-delay: 0.3s;
+      }
+      @keyframes bob {
+        0%,
+        60%,
+        100% {
+          opacity: 0.3;
+          transform: translateY(0);
+        }
+        30% {
+          opacity: 1;
+          transform: translateY(-3px);
+        }
+      }
+
+      /* composer */
+      .composer {
+        flex: none;
+        padding: 12px 20px 16px;
+        border-top: 1px solid var(--border-soft);
+      }
+      .composer-inner {
+        max-width: 720px;
+        margin: 0 auto;
+      }
+      .field {
+        border: 1px solid var(--border);
+        border-radius: 13px;
+        background: var(--panel);
+        padding: 11px 12px 10px 14px;
+        display: flex;
+        align-items: flex-end;
+        gap: 10px;
+        transition: border-color 0.15s;
+      }
+      .field:focus-within {
+        border-color: var(--amber-line);
+      }
+      .ta {
+        flex: 1;
+        min-height: 38px;
+        color: var(--text);
+        font-size: 14px;
+        line-height: 1.5;
+        padding-top: 7px;
+      }
+      .ta .ph {
+        color: var(--faint);
+      }
+      .stop {
+        height: 34px;
+        padding: 0 14px;
+        border-radius: 9px;
+        background: rgba(255, 111, 111, 0.12);
+        border: 1px solid rgba(255, 111, 111, 0.4);
+        color: #ff9a9a;
+        font-weight: 600;
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        cursor: pointer;
+        flex: none;
+      }
+      .stop .sq {
+        width: 9px;
+        height: 9px;
+        border-radius: 2px;
+        background: #ff9a9a;
+      }
+      .composer-foot {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 8px;
+        font-size: 11.5px;
+        color: var(--faint);
+      }
+      .composer-foot .model {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--mono);
+        color: var(--dim);
+      }
+      .composer-foot .hint {
+        margin-left: auto;
+      }
+      .composer-foot .hint b {
+        color: var(--dim);
+        font-weight: 500;
+      }
+
+      /* ───────── right info ───────── */
+      .info {
+        background: var(--rail);
+        border-left: 1px solid var(--border-soft);
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        overflow: auto;
+      }
+      .info-head {
+        height: 52px;
+        flex: none;
+        display: flex;
+        align-items: center;
+        padding: 0 18px;
+        border-bottom: 1px solid var(--border-soft);
+        font-weight: 600;
+        font-size: 13px;
+        letter-spacing: -0.01em;
+      }
+      .info-head .x {
+        margin-left: auto;
+        color: var(--faint);
+        cursor: pointer;
+      }
+      .sec {
+        padding: 16px 18px;
+        border-bottom: 1px solid var(--border-soft);
+      }
+      .sec h4 {
+        margin: 0 0 11px;
+        font-size: 10.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.13em;
+        color: var(--faint);
+        font-weight: 600;
+      }
+      .folder {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 7px 0;
+      }
+      .folder svg {
+        flex: none;
+        color: var(--host);
+      }
+      .folder .fp {
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--text);
+      }
+      .folder .fm {
+        margin-left: auto;
+        font-size: 9.5px;
+        font-family: var(--mono);
+        color: var(--host);
+        background: var(--host-soft);
+        padding: 1px 6px;
+        border-radius: 5px;
+        letter-spacing: 0.04em;
+      }
+      .folder.pending .fp {
+        color: var(--dim);
+      }
+      .folder.pending svg {
+        color: var(--faint);
+      }
+      .folder.pending .fm {
+        color: var(--amber-2);
+        background: var(--amber-soft);
+      }
+      .connect {
+        margin-top: 6px;
+        font-size: 12px;
+        color: var(--faint);
+        cursor: pointer;
+      }
+      .connect:hover {
+        color: var(--dim);
+      }
+
+      .kv {
+        display: flex;
+        align-items: center;
+        margin-bottom: 11px;
+      }
+      .kv:last-child {
+        margin-bottom: 0;
+      }
+      .kv .k {
+        font-size: 12px;
+        color: var(--dim);
+      }
+      .kv .v {
+        margin-left: auto;
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--text);
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11.5px;
+        font-family: var(--mono);
+        padding: 2px 9px;
+        border-radius: 999px;
+        background: rgba(95, 211, 154, 0.12);
+        color: var(--good);
+        border: 1px solid rgba(95, 211, 154, 0.28);
+      }
+      .pdot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--good);
+        box-shadow: 0 0 0 0 rgba(95, 211, 154, 0.6);
+        animation: pulse 2s infinite;
+      }
+      @keyframes pulse {
+        0% {
+          box-shadow: 0 0 0 0 rgba(95, 211, 154, 0.5);
+        }
+        70% {
+          box-shadow: 0 0 0 6px rgba(95, 211, 154, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(95, 211, 154, 0);
+        }
+      }
+      .vmrow {
+        font-size: 11px;
+        color: var(--faint);
+        font-family: var(--mono);
+        margin-top: 8px;
+      }
+      .usage {
+        display: flex;
+        gap: 7px;
+        flex-wrap: wrap;
+      }
+      .chip {
+        font-family: var(--mono);
+        font-size: 11px;
+        padding: 3px 9px;
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid var(--border-soft);
+        color: var(--dim);
+      }
+      .chip b {
+        color: var(--text);
+        font-weight: 600;
+      }
+
+      .legend {
+        position: fixed;
+        bottom: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 11.5px;
+        color: var(--faint);
+        font-family: var(--mono);
+        letter-spacing: 0.02em;
+      }
+      .legend b {
+        color: var(--dim);
+        font-weight: 500;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- reusable capybara glyph -->
+    <svg width="0" height="0" style="position: absolute">
+      <symbol id="capy" viewBox="0 0 28 24">
+        <ellipse cx="16.5" cy="14.5" rx="9.5" ry="6.4" fill="currentColor" />
+        <circle cx="7.5" cy="12" r="5.4" fill="currentColor" />
+        <circle cx="5.6" cy="7.2" r="1.7" fill="currentColor" />
+        <rect x="12" y="19" width="2" height="3.6" rx="1" fill="currentColor" />
+        <rect x="19" y="19" width="2" height="3.6" rx="1" fill="currentColor" />
+        <circle cx="6.4" cy="11.2" r="0.95" fill="#0b0f17" />
+        <ellipse cx="2.9" cy="12.6" rx="1.5" ry="1.15" fill="#0b0f17" opacity="0.55" />
+      </symbol>
+    </svg>
+
+    <div class="win">
+      <div class="titlebar">
+        <div class="lights"><i></i><i></i><i></i></div>
+        <div class="title"><b>Capybara</b> — Organize my Downloads</div>
+        <div></div>
+      </div>
+
+      <div class="body">
+        <!-- LEFT RAIL -->
+        <aside class="rail">
+          <div class="brand">
+            <div class="mark" style="color: #241704">
+              <svg><use href="#capy" /></svg>
+            </div>
+            <div>
+              <div class="name">Capybara</div>
+              <div class="sub">office-work agent</div>
+            </div>
+          </div>
+
+          <div class="newbtn">
+            <span style="font-size: 16px; line-height: 1">+</span> New task
+            <span class="kbd">⌘N</span>
+          </div>
+          <div class="search">
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="M21 21l-4-4" />
+            </svg>
+            Search tasks
+            <span class="kbd">⌘K</span>
+          </div>
+
+          <div class="rail-label">Recent</div>
+          <div class="convos">
+            <a class="convo active">
+              <div class="ct">
+                <span class="title-t">Organize my Downloads</span>
+                <span class="time">now</span>
+              </div>
+              <div class="snip"><span class="run">● running</span> · Bash unzip…</div>
+            </a>
+            <a class="convo">
+              <div class="ct">
+                <span class="title-t">Draft the Q2 update</span>
+                <span class="time">2h</span>
+              </div>
+              <div class="snip"><span class="dot-mini"></span>wrote update.md</div>
+            </a>
+            <a class="convo">
+              <div class="ct">
+                <span class="title-t">Rename invoice PDFs</span>
+                <span class="time">Tue</span>
+              </div>
+              <div class="snip"><span class="dot-mini"></span>renamed 23 files</div>
+            </a>
+            <a class="convo">
+              <div class="ct">
+                <span class="title-t">Find duplicate photos</span>
+                <span class="time">Mon</span>
+              </div>
+              <div class="snip"><span class="dot-mini"></span>found 8 dupes</div>
+            </a>
+            <a class="convo">
+              <div class="ct">
+                <span class="title-t">Summarize meeting notes</span>
+                <span class="time">Mon</span>
+              </div>
+              <div class="snip"><span class="dot-mini"></span>3 action items</div>
+            </a>
+          </div>
+
+          <div class="rail-foot">
+            <div class="avatar-sm">⚙</div>
+            <span>Settings</span>
+            <span class="vm-mini"><span class="pdot"></span>VM ready</span>
+          </div>
+        </aside>
+
+        <!-- CENTER -->
+        <section class="main">
+          <div class="main-head">
+            <div>
+              <div class="h-title">Organize my Downloads</div>
+              <div class="h-sub">3 tools · started 2:13 PM</div>
+            </div>
+            <div class="spacer" style="margin-left: auto"></div>
+            <div class="iconbtn" title="Conversation info">
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <rect x="3" y="4" width="18" height="16" rx="2" />
+                <path d="M15 4v16" />
+              </svg>
+            </div>
+          </div>
+
+          <div class="scroll">
+            <div class="stream">
+              <div class="msg service"><span>New task · today 2:13 PM</span></div>
+
+              <div class="msg user">
+                <div class="bubble">Organize my Downloads folder</div>
+              </div>
+
+              <div class="msg service">
+                <span>Connected <b>~/Downloads</b> — read &amp; write</span>
+              </div>
+
+              <div class="msg turn">
+                <div class="av" style="color: var(--amber)">
+                  <svg><use href="#capy" /></svg>
+                </div>
+                <div class="turn-main">
+                  <div class="who">
+                    <span class="nm">Capybara</span><span class="tm">2:13 PM</span>
+                  </div>
+                  <div class="prose">On it — let me see what's actually in there first.</div>
+
+                  <div class="tool">
+                    <div class="tool-head">
+                      <span class="chev">▾</span>
+                      <span class="tname">Read</span>
+                      <span class="targ">~/Downloads</span>
+                      <span class="spacer"></span>
+                      <span class="badge host">HOST</span>
+                      <span class="tstatus done">✓ 147 items</span>
+                    </div>
+                    <div class="tool-body">
+                      <div class="g"># 147 entries · 4.2 GB</div>
+                      <div>Slack-setup.dmg · Postman.zip · node-v22.pkg</div>
+                      <div>invoice-mar.pdf · receipts.zip · draft.docx</div>
+                      <div>IMG_4821.png · Screenshot 2026-05-22.png</div>
+                      <div class="g">…and 141 more</div>
+                    </div>
+                  </div>
+
+                  <div class="prose">
+                    Mostly <strong>installers</strong>, a few <strong>zip archives</strong>, and a
+                    big pile of <strong>screenshots</strong>. Plan: unpack the archives, then sort
+                    everything into <code>Apps</code>, <code>Docs</code>, <code>Images</code>, and
+                    <code>Archives</code>. Unpacking the zips now —
+                  </div>
+
+                  <div class="tool">
+                    <div class="tool-head">
+                      <span class="chev">▸</span>
+                      <span class="tname">Bash</span>
+                      <span class="targ">unzip '*.zip' -d unpacked/</span>
+                      <span class="spacer"></span>
+                      <span class="badge vm">VM</span>
+                      <span class="tstatus"><span class="spin"></span>running</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="msg turn">
+                <div class="av" style="color: var(--amber)">
+                  <svg><use href="#capy" /></svg>
+                </div>
+                <div class="turn-main">
+                  <div class="prose">
+                    A handful of the screenshots look like they pair with files on your Desktop.
+                    Mind if I look there too?
+                  </div>
+                  <div class="consent">
+                    <div class="ctop">
+                      <div class="lock">
+                        <svg
+                          width="13"
+                          height="13"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                        >
+                          <rect x="4" y="10" width="16" height="11" rx="2" />
+                          <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+                        </svg>
+                      </div>
+                      <div class="ctitle">Capybara wants to access <b>~/Desktop</b></div>
+                    </div>
+                    <div class="cmeta">Read &amp; write · granted only for this conversation</div>
+                    <div class="btns">
+                      <div class="cbtn deny">Deny</div>
+                      <div class="cbtn allow">Allow</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="msg working">
+                Capybara is working <span class="dots"><i></i><i></i><i></i></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="composer">
+            <div class="composer-inner">
+              <div class="field">
+                <div class="ta"><span class="ph">Message Capybara…</span></div>
+                <div class="stop"><span class="sq"></span>Stop</div>
+              </div>
+              <div class="composer-foot">
+                <span class="model">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="12" cy="12" r="9" />
+                  </svg>
+                  claude-sonnet-4-6
+                </span>
+                <span class="hint"><b>Enter</b> to send · <b>⇧Enter</b> newline</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- RIGHT INFO -->
+        <aside class="info">
+          <div class="info-head">Conversation <span class="x">›</span></div>
+
+          <div class="sec">
+            <h4>Granted folders</h4>
+            <div class="folder">
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+                />
+              </svg>
+              <span class="fp">~/Downloads</span>
+              <span class="fm">rw</span>
+            </div>
+            <div class="folder pending">
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+                />
+              </svg>
+              <span class="fp">~/Desktop</span>
+              <span class="fm">asking…</span>
+            </div>
+            <div class="connect">+ Connect a folder</div>
+          </div>
+
+          <div class="sec">
+            <h4>Session</h4>
+            <div class="kv">
+              <span class="k">ID</span>
+              <span class="v"
+                >3a1f…9c2
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  style="color: var(--faint)"
+                >
+                  <rect x="9" y="9" width="11" height="11" rx="2" />
+                  <path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg
+              ></span>
+            </div>
+            <div class="kv">
+              <span class="k">Model</span>
+              <span class="v">claude-sonnet-4-6</span>
+            </div>
+            <div class="kv">
+              <span class="k">Started</span>
+              <span class="v">2:13 PM</span>
+            </div>
+          </div>
+
+          <div class="sec">
+            <h4>Sandbox</h4>
+            <div class="kv">
+              <span class="k">Lima VM</span>
+              <span class="v"
+                ><span class="pill"><span class="pdot"></span>running</span></span
+              >
+            </div>
+            <div class="vmrow">ubuntu-24.04 · vz · 4 vCPU</div>
+            <div class="vmrow" style="margin-top: 4px; color: var(--vm)">
+              bash runs here, isolated from the host
+            </div>
+          </div>
+
+          <div class="sec" style="border-bottom: none">
+            <h4>Tools this task</h4>
+            <div class="usage">
+              <span class="chip">Read <b>2</b></span>
+              <span class="chip">Glob <b>1</b></span>
+              <span class="chip" style="color: var(--vm)">Bash <b>1</b></span>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+    <div class="legend">
+      mockup · <b>blue</b> = host filesystem &nbsp; <b>violet</b> = VM-sandboxed &nbsp;
+      <b>amber</b> = Capybara
+    </div>
+  </body>
+</html>

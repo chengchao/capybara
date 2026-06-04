@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Capybara — Frontend (renderer)</title>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --panel: #1e293b;
+        --panel-2: #334155;
+        --text: #e2e8f0;
+        --text-dim: #94a3b8;
+        --accent: #d792e6;
+        --accent-2: #a78bfa;
+        --warn: #fbbf24;
+        --good: #4ade80;
+        --danger: #f87171;
+        --code-bg: #0b1222;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+        margin: 0;
+        padding: 32px 16px 80px;
+        line-height: 1.6;
+      }
+      .wrap {
+        max-width: 980px;
+        margin: 0 auto;
+      }
+      header {
+        margin-bottom: 28px;
+      }
+      .eyebrow {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin-bottom: 12px;
+      }
+      h1 {
+        font-size: 28px;
+        margin: 0 0 8px;
+        letter-spacing: -0.02em;
+      }
+      .subtitle {
+        color: var(--text-dim);
+        font-size: 14px;
+      }
+      .crumbs {
+        font-size: 12px;
+        color: var(--text-dim);
+        margin-top: 10px;
+      }
+      .crumbs a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      h2 {
+        font-size: 19px;
+        margin: 40px 0 14px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--panel-2);
+      }
+      h3 {
+        font-size: 14px;
+        margin: 22px 0 8px;
+        color: var(--accent);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      p {
+        margin: 0 0 12px;
+        font-size: 14px;
+      }
+      .dim {
+        color: var(--text-dim);
+      }
+      code {
+        background: var(--code-bg);
+        padding: 1px 5px;
+        border-radius: 3px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12.5px;
+        color: #f0e7fb;
+      }
+      pre {
+        background: var(--code-bg);
+        border: 1px solid var(--panel-2);
+        border-radius: 8px;
+        padding: 14px 16px;
+        overflow-x: auto;
+        margin: 12px 0;
+      }
+      pre code {
+        background: none;
+        padding: 0;
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: #d6dcec;
+      }
+      ul {
+        margin: 0 0 12px;
+        padding-left: 20px;
+        font-size: 14px;
+      }
+      li {
+        margin-bottom: 6px;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--panel-2);
+        border-radius: 10px;
+        padding: 16px 18px;
+        margin: 14px 0;
+      }
+      .card.accent {
+        border-left: 3px solid var(--accent);
+      }
+      .card h3 {
+        margin-top: 0;
+      }
+      .pill {
+        display: inline-block;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        padding: 2px 7px;
+        border-radius: 999px;
+        vertical-align: middle;
+        background: rgba(215, 146, 230, 0.16);
+        color: var(--accent);
+        border: 1px solid rgba(215, 146, 230, 0.4);
+      }
+
+      /* Component tree */
+      .tree {
+        background: var(--panel);
+        border: 1px solid var(--panel-2);
+        border-radius: 12px;
+        padding: 18px 20px;
+        margin: 18px 0;
+      }
+      .node {
+        border: 1px solid var(--panel-2);
+        border-radius: 8px;
+        padding: 9px 12px;
+        margin: 6px 0;
+        background: var(--bg);
+      }
+      .node b {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12.5px;
+        color: var(--text);
+      }
+      .node span {
+        color: var(--text-dim);
+        font-size: 12px;
+      }
+      .children {
+        margin-left: 22px;
+        border-left: 1px dashed var(--panel-2);
+        padding-left: 14px;
+      }
+
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 13px;
+        margin: 10px 0;
+      }
+      th,
+      td {
+        border: 1px solid var(--panel-2);
+        padding: 7px 10px;
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        background: var(--panel);
+        color: var(--text-dim);
+        font-weight: 600;
+      }
+      td code {
+        font-size: 11.5px;
+      }
+      .proposed {
+        margin-top: 48px;
+        background: var(--panel);
+        border: 1px solid var(--panel-2);
+        border-radius: 8px;
+        border-top: 3px solid var(--warn);
+        padding: 16px 20px;
+      }
+      .proposed h2 {
+        color: var(--warn);
+        border: none;
+        margin-top: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div class="eyebrow">Capybara · frontend</div>
+        <h1>The renderer — React UI <span class="pill">probe harness</span></h1>
+        <div class="subtitle">
+          A single-window React app (Tier 1 of the
+          <a href="architecture.html" style="color: var(--accent)">architecture</a>) that drives the
+          agent and shows what it does. Today it's a deliberately thin <em>probe</em> over the
+          <code>window.capybara</code> bridge; the real conversation UI is sketched at the end.
+        </div>
+        <div class="crumbs">
+          Renderer = Chromium, sandboxed, no Node · talks to Electron main only through
+          <code>window.capybara</code> (contextBridge) · source under <code>src/</code>
+        </div>
+      </header>
+
+      <h2>At a glance</h2>
+      <p>
+        The renderer is a Vite + React 19 app loaded by Electron from <code>dist/index.html</code>.
+        It has <strong>no router and no global store</strong> — three components, each holding its
+        own <code>useState</code>, all data crossing the process boundary through the typed
+        <code>window.capybara</code> surface. It exists to <em>exercise</em> the host/VM/agent stack
+        end-to-end: type a prompt, run a task, watch the raw event stream. It is not (yet) a
+        polished chat product — the transcript is JSON, newest-first, capped at 20 events.
+      </p>
+
+      <div class="tree">
+        <div class="node">
+          <b>App.tsx</b> <span>— <code>&lt;main&gt;</code> flex column, centered, no router</span>
+        </div>
+        <div class="children">
+          <div class="node">
+            <b>&lt;Settings /&gt;</b>
+            <span>— gear dialog · BYOK Anthropic key (get/set/remove)</span>
+          </div>
+          <div class="node">
+            <b>&lt;VmStatusPill /&gt;</b>
+            <span>— 🟡 starting · 🟢 running · 🔴 failed(reason)</span>
+          </div>
+          <div class="node">
+            <b>&lt;AgentProbe /&gt;</b>
+            <span>— prompt input · Run · resume toggle · JSON event transcript</span>
+          </div>
+        </div>
+      </div>
+
+      <h2>The components</h2>
+
+      <div class="card accent">
+        <h3>AgentProbe.tsx — the task surface</h3>
+        <p>The one screen that matters. State (all local):</p>
+        <pre><code>const [prompt, setPrompt]       = useState("Organize my Downloads folder");
+const [busy, setBusy]           = useState(false);
+const [events, setEvents]       = useState&lt;string[]&gt;([]); // JSON-stringified, newest-first
+const [error, setError]         = useState("");
+const [sessionId, setSessionId] = useState&lt;string | null&gt;(null);
+const [resume, setResume]       = useState(true);</code></pre>
+        <ul>
+          <li>
+            <strong>Subscribe once, on mount.</strong> <code>subscribeAgentEvents(cb)</code> returns
+            an unsubscribe fn (returned from the effect). On each event it captures
+            <code>sessionId</code> from <code>session_started</code> and prepends the JSON to
+            <code>events</code>, sliced to 20:
+            <code>[JSON.stringify(event, null, 2), ...prev].slice(0, 20)</code>.
+          </li>
+          <li>
+            <strong>Run.</strong>
+            <code
+              >startAgentTask({ prompt, resumeSessionId: resume &amp;&amp; sessionId ? sessionId :
+              undefined })</code
+            >. The call returns a <code>{ taskId }</code>; the actual output arrives asynchronously
+            over the event subscription, not as a return value.
+          </li>
+          <li>
+            <strong>Conversation continuity.</strong> The "Continue conversation" checkbox decides
+            whether the captured <code>sessionId</code> is passed back as
+            <code>resumeSessionId</code> on the next run. "New conversation" clears
+            <code>sessionId</code> + <code>events</code>.
+          </li>
+          <li>
+            <strong>Render.</strong> a <code>&lt;pre&gt;</code> of
+            <code>events.join("\n\n")</code> (or "(no agent events yet)"), plus a red
+            <code>&lt;pre&gt;</code> for any thrown <code>error</code>.
+          </li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>VmStatusPill.tsx — boot indicator</h3>
+        <p>
+          Shows the Lima VM's lifecycle. Races a live subscription against a one-shot fetch so it
+          never flashes stale state:
+        </p>
+        <pre><code>const unlisten = subscribeVmStatus((next) =&gt; { receivedEvent = true; setStatus(next); });
+getVmStatus().then((current) =&gt; { if (!receivedEvent) setStatus(current); }); // fetch loses to events</code></pre>
+        <p class="dim" style="margin: 0">
+          Renders a colored pill: <code>starting</code> → 🟡, <code>running</code> → 🟢,
+          <code>failed</code> → 🔴 with the <code>reason</code> in a scrollable
+          <code>&lt;code&gt;</code>. The agent can't usefully run until this is green (main's
+          <code>getSupervisor()</code>
+          requires the VM booted).
+        </p>
+      </div>
+
+      <div class="card">
+        <h3>Settings.tsx — BYOK key</h3>
+        <p>
+          A gear-icon dialog (shadcn/radix <code>Dialog</code>). On open it calls
+          <code>getSettings()</code> →
+          <code>ApiKeyState { hasApiKey, apiKeyPreview, unreadable }</code>; the input placeholder
+          shows the stored preview. Save calls <code>setAnthropicApiKey(key)</code> (passing
+          <code>""</code> removes it) and echoes the returned state; an eye icon toggles reveal; a
+          "Remove" button appears when a key exists. <code>unreadable</code> (keychain unlock
+          failed) gets its own message. The key itself never lives in the renderer — only the
+          boolean + a short preview.
+        </p>
+      </div>
+
+      <h2>The bridge: <code>window.capybara</code></h2>
+      <p>
+        The renderer's <em>only</em> door to main, exposed via contextBridge in
+        <code>electron/preload.ts</code> and typed in <code>src/lib/host.d.ts</code>. Thin
+        per-domain wrappers in <code>src/lib/{agent,vm,settings}.ts</code> forward to it and
+        re-export the types, so components import <code>startAgentTask</code> rather than touching
+        <code>window.capybara</code> directly.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Shape</th>
+            <th>Wrapper</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>startAgentTask</code></td>
+            <td><code>({ prompt, resumeSessionId? }) → Promise&lt;{ taskId }&gt;</code></td>
+            <td>lib/agent.ts</td>
+          </tr>
+          <tr>
+            <td><code>onAgentEvent</code></td>
+            <td><code>(cb: (AgentEvent) =&gt; void) → unsubscribe</code></td>
+            <td>lib/agent.ts</td>
+          </tr>
+          <tr>
+            <td><code>getVmStatus</code> / <code>onVmStatus</code></td>
+            <td><code>() → Promise&lt;VmStatus&gt;</code> / <code>(cb) → unsubscribe</code></td>
+            <td>lib/vm.ts</td>
+          </tr>
+          <tr>
+            <td><code>getSettings</code> / <code>setAnthropicApiKey</code></td>
+            <td>
+              <code>() → Promise&lt;ApiKeyState&gt;</code> /
+              <code>(key) → Promise&lt;ApiKeyState&gt;</code>
+            </td>
+            <td>lib/settings.ts</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>The AgentEvent stream</h3>
+      <p>
+        A task's output is a sequence of these (relayed from main's <code>runTask.ts</code> over
+        <code>webContents.send</code>). The transcript is just this stream, accumulated:
+      </p>
+      <pre><code>type AgentEvent =
+  | { event: "task_started";    taskId }
+  | { event: "session_started"; taskId; sessionId }   // ← captured for resume
+  | { event: "assistant_message"; taskId; text }
+  | { event: "tool_use";    taskId; tool; input; toolUseId }
+  | { event: "tool_result"; taskId; toolUseId; content; isError }   // pairs with tool_use by toolUseId
+  | { event: "task_finished";   taskId; sessionId? };</code></pre>
+      <p class="dim">
+        Note what the UI <em>doesn't</em> do with these yet: <code>tool_use</code> and
+        <code>tool_result</code> share a <code>toolUseId</code> but aren't paired visually;
+        <code>assistant_message.text</code> is shown as JSON, not markdown; there's no
+        running/finished affordance beyond the events themselves.
+      </p>
+
+      <h2>One task, end to end</h2>
+      <p>
+        The key mental model:
+        <strong><code>startAgentTask</code> is fire-and-subscribe.</strong> Its promise resolves to
+        a <code>{ taskId }</code> the instant main accepts the request — the actual work streams
+        back later over the <code>onAgentEvent</code> subscription, not as a return value. A
+        renderer-eye view of one run:
+      </p>
+      <div class="card">
+        <ol style="margin: 0; padding-left: 18px; font-size: 14px">
+          <li>
+            <strong>Run.</strong> <code>runAgent()</code> calls
+            <code>startAgentTask({ prompt, resumeSessionId })</code> → contextBridge →
+            <code>ipcRenderer.invoke("start-agent-task")</code>.
+          </li>
+          <li>
+            <strong>Main accepts.</strong> Assigns a <code>taskId</code>, attaches an
+            <code>AbortController</code>, kicks off <code>runAgentTask(…)</code>, and returns
+            <code>{ taskId }</code> immediately. The renderer just flips <code>busy</code> off — it
+            holds no task handle.
+          </li>
+          <li>
+            <strong>Events stream.</strong> As the in-process agent emits messages, main relays
+            <code>AgentEvent</code>s via <code>webContents.send("agent-event", …)</code>. The
+            mount-time subscription fires once per event.
+          </li>
+          <li>
+            <strong>Renderer accumulates.</strong> Each event is prepended to the transcript;
+            <code>session_started</code> stashes the <code>sessionId</code> (the only event the UI
+            treats specially).
+          </li>
+          <li>
+            <strong>Done.</strong> <code>task_finished</code> closes the turn. The captured
+            <code>sessionId</code>, if "Continue conversation" is on, rides the next
+            <code>startAgentTask</code> as <code>resumeSessionId</code>.
+          </li>
+        </ol>
+      </div>
+      <p class="dim">
+        Consequence of holding no task handle: there's nothing to cancel or reconcile if the user
+        navigates or re-runs mid-task — see the Stop-button item below. The fuller cross-tier
+        sequence (main → VM → supervisor) lives in
+        <a href="architecture.html" style="color: var(--accent)">architecture.html</a> and
+        <a href="per-turn-flow.html" style="color: var(--accent)">per-turn-flow.html</a>.
+      </p>
+
+      <h2>Styling &amp; build</h2>
+      <ul>
+        <li>
+          <strong>Tailwind v4</strong> via <code>@tailwindcss/vite</code>; theme tokens are
+          <code>oklch()</code> CSS variables in <code>src/index.css</code> (<code
+            >@theme inline</code
+          >), with light + dark sets.
+        </li>
+        <li>
+          <strong>shadcn/ui on radix-ui</strong> (<code>components.json</code>): local
+          <code>ui/button</code> (CVA variants), <code>ui/input</code>, <code>ui/dialog</code>.
+          <code>cn()</code> = <code>twMerge(clsx(…))</code> in <code>src/lib/utils.ts</code>.
+        </li>
+        <li><strong>lucide-react</strong> icons, <strong>Geist Variable</strong> font.</li>
+        <li>
+          <strong>Dark mode = system preference only.</strong> <code>src/main.tsx</code> toggles
+          <code>.dark</code> from a <code>prefers-color-scheme</code> listener; there's no in-app
+          toggle (tracked in issue&nbsp;#25).
+        </li>
+        <li>
+          <strong>Vite</strong> with <code>base: "./"</code> (for Electron <code>file://</code>),
+          <code>@ → src</code>, dev server on <code>:1420</code>, and
+          <code>vite-plugin-electron</code> building main + preload.
+        </li>
+      </ul>
+
+      <div class="proposed">
+        <h2>Proposed direction — a conversation UI, learning from Slack &amp; Telegram</h2>
+        <p style="margin: 0 0 12px">
+          Today's <code>AgentProbe</code> is a debug surface; the goal is a focused agent
+          conversation UI. Slack and Telegram desktop have spent a decade solving "a fast, legible
+          message stream in a desktop window" — so borrow their proven patterns rather than
+          reinvent. But <strong>adapt</strong>, because Capybara isn't team chat: there's
+          <em>one</em> agent, not a room of people; the "senders" are
+          <em>agent / tool / system</em>; and the interactions are <em>permission prompts</em>, not
+          reactions and presence.
+        </p>
+        <p class="dim" style="margin: 0 0 6px">What transfers, and what doesn't:</p>
+        <ul style="margin: 0 0 18px">
+          <li>
+            <strong>Drop</strong> (no fit): avatars, presence dots, reactions, @-mentions,
+            multi-room unread math — one agent, one user.
+          </li>
+          <li>
+            <strong>Repurpose</strong> (great fit): Slack's thread pane → a tool-call detail pane;
+            Telegram's centered "service messages" → agent lifecycle events; Telegram bots' inline
+            keyboards → the folder-consent buttons.
+          </li>
+        </ul>
+
+        <h3>Shell — three panes (Slack)</h3>
+        <p>
+          Slack's left-rail / message-pane / right-detail split is the right desktop shell. Map it
+          to: <strong>left</strong> = conversation history (keyed by <code>sessionId</code>, a
+          <code>⌘K</code> quick switcher, <code>⌘N</code> new); <strong>center</strong> = the
+          transcript; <strong>right</strong> (collapsible) = conversation info — granted folders,
+          session id, model, live VM status.
+        </p>
+        <pre><code>┌─────────────┬──────────────────────────────────┬───────────────┐
+│ Conversations│ Transcript                      │ Info          │
+│ ───────────  │ ──────────                      │ ────          │
+│ ▸ Downloads  │ you ▸ organize my Downloads     │ Granted dirs  │
+│   desktop ↻  │ ◆ Capybara                       │  · ~/Downloads│
+│   notes      │   ▸ Read  ~/Downloads/… ✓ host   │               │
+│              │   ▸ Bash  unzip …    ⏳ VM        │ Session 3a1f… │
+│              │ ── granted ~/Downloads ──        │ Model  sonnet │
+│ + New  ⌘N    │ [ message…              ] [Stop] │ VM    🟢       │
+└─────────────┴──────────────────────────────────┴───────────────┘</code></pre>
+
+        <h3>Transcript — turns, not a JSON dump</h3>
+        <ul>
+          <li>
+            <strong>Group by turn (Slack message grouping).</strong> One assistant turn's
+            <code>assistant_message</code> text + its tool calls render as a single timestamped
+            block, not interleaved raw events. Back it with a real model (<code>messages[]</code> +
+            a <code>Map&lt;toolUseId, ToolCall&gt;</code>), not a capped string array.
+          </li>
+          <li>
+            <strong>Markdown, streamed (both).</strong> Render
+            <code>assistant_message.text</code> as markdown as it arrives, with a "working…"
+            indicator between <code>task_started</code> and <code>task_finished</code>; auto-scroll
+            with a Slack-style <em>jump-to-latest</em> pill when the user has scrolled up.
+          </li>
+          <li>
+            <strong>Service messages (Telegram).</strong> Lifecycle and system events —
+            <code>session_started</code>, <code>task_finished</code>, "Granted ~/Desktop", VM
+            transitions — render as centered, muted "service" lines, the way Telegram shows
+            joins/pins. This is what replaces the raw JSON event dump.
+          </li>
+        </ul>
+
+        <h3>Tool calls — cards, detail in the side pane (Slack threads)</h3>
+        <ul>
+          <li>
+            Pair <code>tool_use</code> ↔ <code>tool_result</code> by <code>toolUseId</code> into one
+            collapsible card: tool name, a spinner until the result lands, a
+            <strong>host vs VM badge</strong> (a <code>Bash</code> card ran in the VM; a
+            <code>Read</code> card on the host — the trust boundary made visible), and an error
+            state from <code>isError</code>.
+          </li>
+          <li>
+            Clicking a card opens its full input/output in the <strong>right pane</strong> — the
+            same move as opening a Slack thread, so detail never clutters the main flow. Code/file
+            output gets syntax highlighting, collapse, and a copy button (Slack code blocks).
+          </li>
+        </ul>
+
+        <h3>Consent — inline action buttons (Telegram bot inline keyboards)</h3>
+        <p>
+          The path-gating deny → <code>request_capybara_directory</code> → grant loop (<a
+            href="path-gating.html"
+            style="color: var(--accent)"
+            >path-gating.html</a
+          >) today pops a native OS dialog. Telegram bots already solved "a bot asks the user to
+          choose" with <em>inline keyboards</em> — buttons attached under a message. Render consent
+          the same way:
+        </p>
+        <pre><code>◆ Capybara wants to access  ~/Desktop
+                            [ Allow ]   [ Deny ]</code></pre>
+        <p class="dim" style="margin: 0 0 6px">
+          In-flow, dismissable, and it keeps the granted-dirs list in the right info pane. This is
+          the one place the model fits an agent better than team chat does — the agent
+          <em>asks</em>, like a bot.
+        </p>
+
+        <h3>Composer &amp; feel (Slack / Telegram)</h3>
+        <ul>
+          <li>
+            <strong>A real composer:</strong> multiline input pinned at the bottom,
+            <code>Enter</code> to send / <code>Shift+Enter</code> for a newline, a
+            <strong>Stop</strong> button while a task runs, and slash commands (<code>/new</code>,
+            <code>/resume</code>, <code>/model</code>) echoing Telegram's bot command menu.
+          </li>
+          <li>
+            <strong>Telegram's restraint:</strong> fast and low-chrome — virtualize long
+            transcripts, smooth scroll, instant interactions, nothing heavier than the content. Plus
+            the in-app dark-mode toggle (#25) and model selection in Settings.
+          </li>
+        </ul>
+
+        <p class="dim" style="margin: 16px 0 0">
+          <strong>Cost to get there:</strong> most of this is pure renderer work over the existing
+          event stream — no main changes. Only two pieces need the bridge: a
+          <code>cancelAgentTask(taskId)</code> for the Stop button, and surfacing the consent
+          request to the renderer (so the inline buttons can replace the native dialog).
+        </p>
+      </div>
+    </div>
+  </body>
+</html>
