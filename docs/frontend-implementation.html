@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Capybara — Frontend implementation plan</title>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --panel: #1e293b;
+        --panel-2: #334155;
+        --text: #e2e8f0;
+        --text-dim: #94a3b8;
+        --accent: #d792e6;
+        --host: #69b4ff;
+        --vm: #b18cff;
+        --amber: #f2b15a;
+        --warn: #fbbf24;
+        --good: #4ade80;
+        --code-bg: #0b1222;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+        margin: 0;
+        padding: 32px 16px 80px;
+        line-height: 1.6;
+      }
+      .wrap {
+        max-width: 980px;
+        margin: 0 auto;
+      }
+      header {
+        margin-bottom: 28px;
+      }
+      .eyebrow {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin-bottom: 12px;
+      }
+      h1 {
+        font-size: 28px;
+        margin: 0 0 8px;
+        letter-spacing: -0.02em;
+      }
+      .subtitle {
+        color: var(--text-dim);
+        font-size: 14px;
+      }
+      .crumbs {
+        font-size: 12px;
+        color: var(--text-dim);
+        margin-top: 10px;
+      }
+      .crumbs a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      h2 {
+        font-size: 19px;
+        margin: 40px 0 14px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--panel-2);
+      }
+      h3 {
+        font-size: 14px;
+        margin: 22px 0 8px;
+        color: var(--accent);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      p {
+        margin: 0 0 12px;
+        font-size: 14px;
+      }
+      .dim {
+        color: var(--text-dim);
+      }
+      code {
+        background: var(--code-bg);
+        padding: 1px 5px;
+        border-radius: 3px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12.5px;
+        color: #f0e7fb;
+      }
+      pre {
+        background: var(--code-bg);
+        border: 1px solid var(--panel-2);
+        border-radius: 8px;
+        padding: 14px 16px;
+        overflow-x: auto;
+        margin: 12px 0;
+      }
+      pre code {
+        background: none;
+        padding: 0;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: #d6dcec;
+      }
+      ul,
+      ol {
+        margin: 0 0 12px;
+        padding-left: 20px;
+        font-size: 14px;
+      }
+      li {
+        margin-bottom: 7px;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--panel-2);
+        border-radius: 10px;
+        padding: 16px 18px;
+        margin: 14px 0;
+      }
+      .card.accent {
+        border-left: 3px solid var(--accent);
+      }
+      .card h3 {
+        margin-top: 0;
+      }
+      .lede {
+        background: var(--panel);
+        border: 1px solid var(--panel-2);
+        border-left: 3px solid var(--accent);
+        border-radius: 10px;
+        padding: 14px 18px;
+        margin: 18px 0 6px;
+      }
+      .pillrow {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin: 6px 0 0;
+      }
+      .pill {
+        font-size: 11px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        padding: 2px 9px;
+        border-radius: 999px;
+        border: 1px solid var(--panel-2);
+        color: var(--text-dim);
+      }
+      .pill.host {
+        color: var(--host);
+        border-color: rgba(105, 180, 255, 0.4);
+      }
+      .pill.vm {
+        color: var(--vm);
+        border-color: rgba(177, 140, 255, 0.4);
+      }
+      /* PR ladder */
+      .pr {
+        display: flex;
+        gap: 14px;
+        padding: 13px 0;
+        border-top: 1px solid var(--panel-2);
+      }
+      .pr:first-child {
+        border-top: none;
+      }
+      .pr .n {
+        flex: none;
+        width: 26px;
+        height: 26px;
+        border-radius: 7px;
+        background: var(--accent);
+        color: #1a1022;
+        font-weight: 700;
+        font-size: 13px;
+        display: grid;
+        place-items: center;
+        margin-top: 1px;
+      }
+      .pr .b {
+        font-weight: 600;
+        font-size: 14px;
+      }
+      .pr .d {
+        color: var(--text-dim);
+        font-size: 13px;
+        margin-top: 2px;
+      }
+      .pr .tag {
+        font-size: 10px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        padding: 1px 7px;
+        border-radius: 999px;
+        margin-left: 8px;
+        vertical-align: middle;
+      }
+      .tag.renderer {
+        color: var(--good);
+        background: rgba(74, 222, 128, 0.14);
+      }
+      .tag.bridge {
+        color: var(--warn);
+        background: rgba(251, 191, 36, 0.14);
+      }
+      .tree {
+        background: var(--code-bg);
+        border: 1px solid var(--panel-2);
+        border-radius: 8px;
+        padding: 14px 16px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12.5px;
+        line-height: 1.7;
+        color: #cdd9f0;
+        overflow-x: auto;
+        margin: 12px 0;
+      }
+      .tree .c {
+        color: var(--text-dim);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div class="eyebrow">Capybara · frontend</div>
+        <h1>Building the conversation UI — implementation plan</h1>
+        <div class="subtitle">
+          How the prototype becomes real code in <code>src/</code>: a transcript model over the
+          existing event stream, a three-pane shell, and two small bridge additions — shipped as an
+          incremental PR ladder.
+        </div>
+        <div class="crumbs">
+          Design: <a href="frontend.html">frontend.html</a> · visual spec:
+          <a href="frontend-mockup.html">frontend-mockup.html</a> · interactive UX:
+          <a href="frontend-prototype.html">frontend-prototype.html</a>
+        </div>
+      </header>
+
+      <div class="lede">
+        <p style="margin: 0">
+          The prototypes are a <strong>design spec, not the code</strong> — the implementation
+          follows them but is rebuilt in the app's real stack (React + TS + Tailwind v4 +
+          shadcn/ui). The guiding move: build the UI
+          <strong>over the <code>AgentEvent</code> stream that already exists</strong>, so the
+          biggest visual jump needs <em>zero</em> main-process changes; the two pieces that do need
+          the bridge (Stop, inline consent) come later as isolated PRs. Every step ships on its own.
+        </p>
+      </div>
+
+      <h2>1. The load-bearing piece — a transcript model</h2>
+      <p>
+        Replace <code>AgentProbe</code>'s "stringify each event into a capped array" with a
+        <strong>pure reducer</strong> that folds the event stream into a structured tree. This is
+        the one thing to get exactly right (tool pairing by <code>toolUseId</code>, turn grouping).
+      </p>
+      <pre><code>type Origin = "host" | "vm";   // derived from tool name: Bash → vm, Read/Glob/Write → host
+
+type Block =
+  | { kind: "text"; text: string }
+  | { kind: "tool"; id: string; name: string; origin: Origin;
+      input: unknown; result?: unknown; status: "running" | "done" | "error" }
+  | { kind: "consent"; requestId: string; path: string; state: "pending" | "allow" | "deny" };
+
+type Item =
+  | { role: "service"; text: string }
+  | { role: "user"; text: string }
+  | { role: "assistant"; time: string; blocks: Block[] };
+
+type Conversation = {
+  sessionId?: string; title: string;
+  items: Item[]; grants: string[];
+  status: "idle" | "running" | "done";
+};
+
+function applyEvent(c: Conversation, e: AgentEvent): Conversation</code></pre>
+      <p><code>applyEvent</code> mapping:</p>
+      <ul>
+        <li><code>task_started</code> → <code>status: "running"</code></li>
+        <li>
+          <code>session_started</code> → set <code>sessionId</code> (+ title from first user
+          message)
+        </li>
+        <li>
+          <code>assistant_message</code> → append/merge a <code>text</code> block into the current
+          assistant turn
+        </li>
+        <li>
+          <code>tool_use</code> → push a <code>tool</code> block keyed by <code>toolUseId</code>,
+          <code>status: "running"</code>, <code>origin</code> from the name
+        </li>
+        <li>
+          <code>tool_result</code> → find that block by <code>toolUseId</code>, attach
+          <code>result</code>, set <code>done</code>/<code>error</code> (from <code>isError</code>)
+        </li>
+        <li><code>task_finished</code> → <code>status: "done"</code></li>
+      </ul>
+      <p class="dim">
+        Because it's pure, a <code>transcript.test.ts</code> that feeds event sequences and asserts
+        the resulting tree is the single highest-value test in the whole effort — it catches the
+        pairing/grouping bugs before they reach the screen. Lives in a
+        <code>ConversationProvider</code> with <code>useReducer</code> (the app has no store today;
+        per KISS, don't add one until PR 5 needs it).
+      </p>
+
+      <h2>2. Component tree</h2>
+      <div class="tree">
+        AppShell <span class="c">three-pane grid (Sidebar | ConversationView | InfoPane*)</span> ├─
+        Sidebar <span class="c">ConversationList · NewTask · (⌘K search)</span> ├─ ConversationView
+        │ ├─ Header │ ├─ Transcript
+        <span class="c">items → UserMessage | ServiceMessage | AssistantTurn</span> │ │ └─
+        AssistantTurn → blocks → <span class="c">MarkdownText | ToolCard | ConsentCard</span> │ └─
+        Composer <span class="c">textarea (Enter / Shift+Enter) · Send / Stop</span> └─ InfoPane*
+        <span class="c">grants · session · model · VmStatusPill · tool counts (*collapsible)</span>
+      </div>
+      <p class="dim">
+        Reuse what exists: <code>ui/{button,dialog,input}</code>, the <code>Settings</code> dialog,
+        and <code>VmStatusPill</code> (folded into the InfoPane). New, custom-but-Tailwind'd:
+        <code>ToolCard</code>, <code>ConsentCard</code>, the bubbles, and the service line.
+      </p>
+
+      <h2>3. Styling &amp; rendering</h2>
+      <ul>
+        <li>
+          <strong>Tailwind v4, not the prototype's hand-CSS.</strong> Port the prototype palette
+          into <code>index.css</code> <code>@theme</code> as semantic tokens (host = blue, vm =
+          violet, agent = amber); the prototype HTML is the visual reference, not the source.
+          <div class="pillrow">
+            <span class="pill host">host = blue</span>
+            <span class="pill vm">vm = violet</span>
+            <span class="pill" style="color: var(--amber); border-color: rgba(242, 177, 90, 0.4)"
+              >agent = amber</span
+            >
+          </div>
+        </li>
+        <li>
+          <strong>Markdown:</strong> <code>react-markdown</code> + <code>remark-gfm</code>, with a
+          code-block component (copy + light highlight). "Streaming" today means text arrives
+          <em>per event/block</em>, not per token (that's how <code>runTask</code> relays) — append
+          as it comes.
+        </li>
+        <li>Auto-scroll + jump-to-latest; virtualize the transcript only once it gets long.</li>
+      </ul>
+
+      <h2>4. The two bridge additions</h2>
+      <div class="card accent">
+        <h3>cancelAgentTask(taskId) <span class="dim" style="font-weight: 400">— tiny</span></h3>
+        <p style="margin: 0">
+          <code>preload</code> exposes it → <code>ipcMain.handle("cancel-agent-task")</code> →
+          <code>activeTasks.get(taskId)?.abort()</code>. Main <em>already</em> holds the
+          <code>AbortController</code> per task; it's just not reachable from the renderer. Wires
+          the Stop button.
+        </p>
+      </div>
+      <div class="card accent">
+        <h3>
+          Inline consent
+          <span class="dim" style="font-weight: 400">— medium, security-sensitive</span>
+        </h3>
+        <p style="margin: 0 0 8px">
+          Today <code>consent.ts</code> shows a <strong>native dialog</strong> inside the MCP tool
+          handler. To render the inline <code>[Allow]/[Deny]</code> instead, the request round-trips
+          to the renderer:
+        </p>
+        <ul style="margin: 0">
+          <li>
+            new <code>AgentEvent</code> variant <code>consent_request { requestId, path }</code> —
+            main emits it;
+          </li>
+          <li>
+            new bridge method <code>respondConsent(requestId, allow)</code> — resolves the pending
+            promise inside <code>requestDirectoryConsent</code>;
+          </li>
+          <li>
+            keep the <strong>native dialog as a fallback</strong> (no window / headless) so the gate
+            never hangs.
+          </li>
+        </ul>
+      </div>
+
+      <h2>5. PR ladder</h2>
+      <p class="dim">Each step is independently shippable; PRs 1–2 are pure renderer work.</p>
+      <div class="card" style="padding: 6px 18px">
+        <div class="pr">
+          <div class="n">1</div>
+          <div>
+            <div class="b">
+              Transcript model + read-only conversation view
+              <span class="tag renderer">renderer</span>
+            </div>
+            <div class="d">
+              The reducer + types +
+              <code>Transcript</code
+              >/<code>AssistantTurn</code>/<code>ToolCard</code>/<code>MarkdownText</code>/<code>ServiceMessage</code>,
+              swapped in for the raw-JSON <code>&lt;pre&gt;</code>. No main changes. Biggest visual
+              jump. Ships with <code>transcript.test.ts</code>.
+            </div>
+          </div>
+        </div>
+        <div class="pr">
+          <div class="n">2</div>
+          <div>
+            <div class="b">
+              Three-pane shell + composer <span class="tag renderer">renderer</span>
+            </div>
+            <div class="d">
+              Sidebar (single conversation to start), InfoPane (grants / session / model / VM from
+              existing <code>getVmStatus</code>·<code>onVmStatus</code>·<code>getSettings</code>),
+              real composer. Fold in <code>VmStatusPill</code>.
+            </div>
+          </div>
+        </div>
+        <div class="pr">
+          <div class="n">3</div>
+          <div>
+            <div class="b">Stop button <span class="tag bridge">bridge</span></div>
+            <div class="d">Adds <code>cancelAgentTask</code> to preload/main. Small.</div>
+          </div>
+        </div>
+        <div class="pr">
+          <div class="n">4</div>
+          <div>
+            <div class="b">Inline consent <span class="tag bridge">bridge</span></div>
+            <div class="d">
+              The round-trip + <code>ConsentCard</code> replacing the native dialog. Touches the
+              security path — re-verify the deny → request → retry loop end to end.
+            </div>
+          </div>
+        </div>
+        <div class="pr">
+          <div class="n">5</div>
+          <div>
+            <div class="b">
+              Conversation history + persistence <span class="tag renderer">renderer</span>
+            </div>
+            <div class="d">
+              Multiple conversations keyed by <code>sessionId</code>, <code>--resume</code> any,
+              persisted (disk / localStorage). This is where a store (Zustand) earns its place.
+            </div>
+          </div>
+        </div>
+        <div class="pr">
+          <div class="n">6</div>
+          <div>
+            <div class="b">Polish <span class="tag renderer">renderer</span></div>
+            <div class="d">
+              Code copy/highlight, jump-to-latest, virtualization, dark-mode toggle (#25), model
+              picker. (<code>Edit</code>/<code>Grep</code> enablement — a separate follow-up — slots
+              in wherever.)
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <h2>6. Verification</h2>
+      <ul>
+        <li>
+          <strong>Unit:</strong> <code>transcript.test.ts</code> — event sequences → expected tree.
+          Pure, cheap, catches the pairing/grouping bugs.
+        </li>
+        <li>
+          <strong>End-to-end:</strong> drive the real app via CDP (as we did for the proxy and
+          path-gating), with <code>CAPYBARA_AUTO_CONSENT=1</code> for the allow path.
+        </li>
+      </ul>
+
+      <h2>Notes &amp; risks</h2>
+      <ul>
+        <li>PRs 1–2 are pure renderer work — low risk, high payoff; start there.</li>
+        <li>
+          The consent round-trip (PR 4) is the one change touching the security path — keep the
+          native-dialog fallback, and re-verify the gate.
+        </li>
+        <li>
+          KISS: single conversation + <code>useReducer</code> until PR 5; don't pull in a store or
+          persistence early.
+        </li>
+      </ul>
+    </div>
+  </body>
+</html>

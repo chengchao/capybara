@@ -204,6 +204,28 @@
           <div class="file">architecture.html →</div>
         </a>
 
+        <a class="card accent-ui" href="frontend.html">
+          <div class="tag">renderer <span class="badge current">current</span></div>
+          <h3>Frontend</h3>
+          <p>
+            The React renderer (Tier 1): the probe-harness UI, the
+            <code>window.capybara</code> bridge + <code>AgentEvent</code> stream, local state, and
+            where the real conversation UI is headed.
+          </p>
+          <div class="file">frontend.html →</div>
+        </a>
+
+        <a class="card accent-ui" href="frontend-implementation.html">
+          <div class="tag">renderer <span class="badge proposed">proposed</span></div>
+          <h3>Conversation UI — plan</h3>
+          <p>
+            Turning the prototype into real code: a transcript model over the event stream, a
+            three-pane shell, two small bridge additions, and a PR ladder. Mockup + interactive
+            prototype linked inside.
+          </p>
+          <div class="file">frontend-implementation.html →</div>
+        </a>
+
         <a class="card accent-agent" href="per-turn-flow.html">
           <div class="tag">flow <span class="badge current">current</span></div>
           <h3>Per-turn flow</h3>
@@ -212,6 +234,27 @@
             Electron main — and what lives one turn vs. forever.
           </p>
           <div class="file">per-turn-flow.html →</div>
+        </a>
+
+        <a class="card accent-host" href="path-gating.html">
+          <div class="tag">security <span class="badge current">current</span></div>
+          <h3>Path gating</h3>
+          <p>
+            App-layer folder permissions for the host file tools: a <code>PreToolUse</code> hook +
+            session grant store, with a deny → <code>request_capybara_directory</code> → consent
+            loop.
+          </p>
+          <div class="file">path-gating.html →</div>
+        </a>
+
+        <a class="card accent-host" href="llm-proxy.html">
+          <div class="tag">security <span class="badge current">current</span></div>
+          <h3>LLM proxy</h3>
+          <p>
+            Keeps the BYOK key out of the agent subprocess: a loopback proxy in main swaps a
+            disposable token for the real key on the way to Anthropic.
+          </p>
+          <div class="file">llm-proxy.html →</div>
         </a>
 
         <a class="card accent-agent" href="host-agent-vm-bash.html">
