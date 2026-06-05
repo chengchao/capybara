@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import Settings from "@/components/Settings";
-import { startAgentTask, subscribeAgentEvents } from "@/lib/agent";
+import { cancelAgentTask, startAgentTask, subscribeAgentEvents } from "@/lib/agent";
 import { addUser, applyEvent, emptyConversation } from "@/lib/transcript";
 import { useVmStatus } from "@/lib/vm";
 
@@ -14,6 +14,7 @@ export function ChatApp() {
   const [error, setError] = useState("");
   const [infoOpen, setInfoOpen] = useState(true);
   const vm = useVmStatus();
+  const taskId = useRef<string | null>(null);
 
   useEffect(() => subscribeAgentEvents((event) => setConvo((c) => applyEvent(c, event))), []);
 
@@ -23,10 +24,15 @@ export function ChatApp() {
     const resumeSessionId = convo.sessionId ?? undefined;
     setConvo((c) => addUser(c, text));
     try {
-      await startAgentTask({ prompt: text, resumeSessionId });
+      const { taskId: id } = await startAgentTask({ prompt: text, resumeSessionId });
+      taskId.current = id;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
+  }
+
+  function stop() {
+    if (taskId.current) cancelAgentTask(taskId.current);
   }
 
   function newTask() {
@@ -49,6 +55,7 @@ export function ChatApp() {
         infoOpen={infoOpen}
         onToggleInfo={() => setInfoOpen((v) => !v)}
         onSend={send}
+        onStop={stop}
       />
       {infoOpen && <InfoPane conversation={convo} vm={vm} onClose={() => setInfoOpen(false)} />}
       <Settings />

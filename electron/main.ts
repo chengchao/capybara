@@ -106,6 +106,10 @@ if (!gotLock) {
     },
   );
 
+  ipcMain.handle("cancel-agent-task", (_event, taskId: unknown): void => {
+    if (typeof taskId === "string") activeTasks.get(taskId)?.abort();
+  });
+
   app.whenReady().then(async () => {
     // Start the loopback LLM proxy before anything can launch an agent task,
     // so runTask always finds it via getLlmProxy(). Binding a localhost port is

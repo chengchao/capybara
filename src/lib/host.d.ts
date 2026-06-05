@@ -6,6 +6,7 @@ declare global {
         prompt: string;
         resumeSessionId?: string;
       }) => Promise<{ taskId: string }>;
+      cancelAgentTask: (taskId: string) => Promise<void>;
       getSettings: () => Promise<ApiKeyState>;
       setAnthropicApiKey: (key: string) => Promise<ApiKeyState>;
       onVmStatus: (callback: (status: VmStatus) => void) => () => void;

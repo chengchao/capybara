@@ -9,6 +9,10 @@ export function startAgentTask(args: {
   return window.capybara.startAgentTask(args);
 }
 
+export function cancelAgentTask(taskId: string): Promise<void> {
+  return window.capybara.cancelAgentTask(taskId);
+}
+
 export function subscribeAgentEvents(cb: (event: AgentEvent) => void): () => void {
   return window.capybara.onAgentEvent(cb);
 }
