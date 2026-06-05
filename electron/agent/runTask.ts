@@ -32,7 +32,9 @@ export type AgentEvent =
       content: unknown;
       isError: boolean;
     }
-  | { event: "task_finished"; taskId: string; sessionId?: string };
+  | { event: "task_finished"; taskId: string; sessionId?: string }
+  // Emitted by the consent broker (electron/consent.ts), not this task's `emit`.
+  | { event: "consent_request"; requestId: string; path: string };
 
 type AgentEventEmitter = (event: AgentEvent) => void;
 

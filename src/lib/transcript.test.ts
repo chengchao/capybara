@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 
 import type { AgentEvent } from "./host";
-import { addUser, applyEvent, emptyConversation, originFor } from "./transcript";
+import { addUser, applyEvent, emptyConversation, originFor, resolveConsent } from "./transcript";
 
 const fold = (events: AgentEvent[]) => events.reduce(applyEvent, emptyConversation());
 const T = "t1";
@@ -111,4 +111,46 @@ test("a realistic run folds into user → assistant(text, tool, text)", () => {
   expect(c.status).toBe("done");
   const turn = c.items[0] as { blocks: Array<{ kind: string }> };
   expect(turn.blocks.map((b) => b.kind)).toEqual(["text", "tool", "text"]);
+});
+
+test("consent_request becomes a pending consent block", () => {
+  const c = fold([{ event: "consent_request", requestId: "c1", path: "/Users/x/Desktop" }]);
+  const turn = c.items[0] as { blocks: Array<Record<string, unknown>> };
+  expect(turn.blocks[0]).toMatchObject({
+    kind: "consent",
+    id: "c1",
+    path: "/Users/x/Desktop",
+    state: "pending",
+  });
+});
+
+test("the request_capybara_directory tool call is suppressed (consent card stands in)", () => {
+  const c = fold([
+    {
+      event: "tool_use",
+      taskId: T,
+      tool: "request_capybara_directory",
+      input: {},
+      toolUseId: "u1",
+    },
+    { event: "consent_request", requestId: "c1", path: "/Users/x/Desktop" },
+  ]);
+  const turn = c.items[0] as { blocks: Array<{ kind: string }> };
+  expect(turn.blocks.map((b) => b.kind)).toEqual(["consent"]);
+});
+
+test("allowing a consent resolves the card and adds the folder to grants", () => {
+  let c = fold([{ event: "consent_request", requestId: "c1", path: "/Users/x/Desktop" }]);
+  c = resolveConsent(c, "c1", "allow");
+  expect(c.grants).toEqual(["/Users/x/Desktop"]);
+  const turn = c.items[0] as { blocks: Array<Record<string, unknown>> };
+  expect(turn.blocks[0]).toMatchObject({ state: "allow" });
+});
+
+test("denying a consent resolves the card without granting", () => {
+  let c = fold([{ event: "consent_request", requestId: "c1", path: "/Users/x/Desktop" }]);
+  c = resolveConsent(c, "c1", "deny");
+  expect(c.grants).toEqual([]);
+  const turn = c.items[0] as { blocks: Array<Record<string, unknown>> };
+  expect(turn.blocks[0]).toMatchObject({ state: "deny" });
 });

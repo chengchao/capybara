@@ -4,6 +4,7 @@ import path from "node:path";
 import { app, BrowserWindow, ipcMain } from "electron";
 
 import { runAgentTask } from "./agent/runTask";
+import { respondConsent } from "./consent";
 import { startLlmProxy, stopLlmProxy } from "./llmProxy";
 import { getAnthropicApiKey, hasStoredApiKey, setAnthropicApiKey } from "./settings";
 import { ensureVm, getVmStatus, setStatusEmitter, stopSupervisor, stopVm } from "./vm";
@@ -108,6 +109,10 @@ if (!gotLock) {
 
   ipcMain.handle("cancel-agent-task", (_event, taskId: unknown): void => {
     if (typeof taskId === "string") activeTasks.get(taskId)?.abort();
+  });
+
+  ipcMain.handle("respond-consent", (_event, args: { requestId?: unknown; allow?: unknown }) => {
+    if (typeof args?.requestId === "string") respondConsent(args.requestId, args.allow === true);
   });
 
   app.whenReady().then(async () => {

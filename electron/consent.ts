@@ -1,23 +1,46 @@
 import { app, BrowserWindow, dialog } from "electron";
 
-// Native Allow/Deny dialog for a host folder-access request; returns true on
-// Allow. CAPYBARA_AUTO_CONSENT=1 auto-approves — the dialog is a native OS modal
-// that headless e2e (CDP) can't click, so the flag drives the allow path there.
-// Dev-only: fenced behind `!app.isPackaged` so it can't disable consent in a
-// shipped build.
-export async function requestDirectoryConsent(p: string): Promise<boolean> {
-  if (!app.isPackaged && process.env.CAPYBARA_AUTO_CONSENT === "1") return true;
-  const opts = {
-    type: "question" as const,
-    message: `Capybara wants to access ${p}`,
+// Folder-access consent. The preferred path is INLINE: emit a `consent_request`
+// to the renderer (over the agent-event channel) and await the user's choice via
+// `respondConsent`, so the prompt renders as an Allow/Deny card in the
+// conversation. With no renderer (headless e2e, or pre-window), fall back to a
+// native OS dialog. CAPYBARA_AUTO_CONSENT=1 auto-approves (dev-only) for the
+// CDP tests that can't click either surface.
+
+type Pending = { resolve: (allow: boolean) => void };
+const pending = new Map<string, Pending>();
+let counter = 0;
+
+export function respondConsent(requestId: string, allow: boolean): void {
+  const p = pending.get(requestId);
+  if (!p) return;
+  pending.delete(requestId);
+  p.resolve(allow);
+}
+
+export function requestDirectoryConsent(path: string): Promise<boolean> {
+  if (!app.isPackaged && process.env.CAPYBARA_AUTO_CONSENT === "1") return Promise.resolve(true);
+
+  const win = BrowserWindow.getAllWindows()[0];
+  if (!win || win.webContents.isDestroyed()) return nativeDialog(path);
+
+  const requestId = `consent-${++counter}`;
+  return new Promise<boolean>((resolve) => {
+    pending.set(requestId, { resolve });
+    // If the window goes away before the user answers, treat it as a deny so the
+    // agent's tool call never hangs.
+    win.webContents.once("destroyed", () => respondConsent(requestId, false));
+    win.webContents.send("agent-event", { event: "consent_request", requestId, path });
+  });
+}
+
+async function nativeDialog(path: string): Promise<boolean> {
+  const { response } = await dialog.showMessageBox({
+    type: "question",
+    message: `Capybara wants to access ${path}`,
     buttons: ["Deny", "Allow"],
     defaultId: 0,
     cancelId: 0,
-  };
-  // One window; `mainWindow` in main.ts is block-scoped and not exported.
-  const win = BrowserWindow.getAllWindows()[0];
-  const { response } = win
-    ? await dialog.showMessageBox(win, opts)
-    : await dialog.showMessageBox(opts);
+  });
   return response === 1;
 }
