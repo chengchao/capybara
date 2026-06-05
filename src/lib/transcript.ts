@@ -109,3 +109,21 @@ export function applyEvent(c: Conversation, e: AgentEvent): Conversation {
 export function addUser(c: Conversation, text: string): Conversation {
   return { ...c, items: [...c.items, { id: `i${c.items.length}`, role: "user", text }] };
 }
+
+// The conversation's display title: the first thing the user asked.
+export function conversationTitle(c: Conversation): string {
+  const first = c.items.find((i) => i.role === "user");
+  return first && first.role === "user" ? first.text : "New task";
+}
+
+// Tool-call counts by name, for the info pane (e.g. { Read: 2, Bash: 1 }).
+export function toolCounts(c: Conversation): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const it of c.items) {
+    if (it.role !== "assistant") continue;
+    for (const b of it.blocks) {
+      if (b.kind === "tool") counts[b.name] = (counts[b.name] ?? 0) + 1;
+    }
+  }
+  return counts;
+}
