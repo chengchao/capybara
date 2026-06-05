@@ -5,14 +5,17 @@ import path from "node:path";
 // under userData/conversations/, so a single conversation's update rewrites only
 // its own file (not the whole history). It's a display cache, not the source of
 // truth: the agent's real session history lives with the SDK (resumed via
-// `sessionId`) and folder grants live in main's in-memory store. Main treats each
-// conversation as opaque JSON except for the stale-"running" repair below — the
-// renderer owns the shape.
-type StoredConversation = { id?: unknown; createdAt?: unknown; status?: string; taskId?: unknown };
+// `sessionId`) and folder grants live in main's in-memory store.
+//
+// Main is a dumb store: it reads/writes raw JSON and stays agnostic to the
+// transcript shape. The renderer (src/lib/transcript.ts) owns the Conversation
+// schema and validates every record on load, dropping a corrupt/partial/older
+// file and applying the stale-"running" repair — so the shape logic lives in one
+// place, next to the type.
 
 function conversationsDir(): string {
-  // Lazy require so the pure helpers stay importable under bun:test, where
-  // evaluating the "electron" module fails (it's a runtime-only binding).
+  // Lazy require so isSafeId stays importable under bun:test, where evaluating
+  // the "electron" module fails (it's a runtime-only binding).
   const { app } = require("electron") as typeof import("electron");
   return path.join(app.getPath("userData"), "conversations");
 }
@@ -24,47 +27,44 @@ export function isSafeId(id: unknown): id is string {
   return typeof id === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(id);
 }
 
-// A persisted "running" status is stale — the task that was in flight didn't
-// survive the restart — so settle it to "done" with no live taskId. A non-object
-// returns null (the caller drops it) rather than being trusted.
-export function sanitizeOne(parsed: unknown): StoredConversation | null {
-  if (!parsed || typeof parsed !== "object") return null;
-  const c = parsed as StoredConversation;
-  return c.status === "running" ? { ...c, status: "done", taskId: null } : c;
-}
-
-// Read every conversation file, newest first (by createdAt), dropping any that
-// won't parse rather than losing the whole history. A missing directory (first
-// run) yields an empty list.
-export function loadConversations(): StoredConversation[] {
+// Read every conversation file as raw parsed JSON, skipping any that won't parse
+// rather than failing the whole load. The renderer validates each against the
+// Conversation schema and drops bad shapes, so the order/contents here are
+// untrusted. A missing directory (first run) yields an empty list.
+export function loadConversations(): unknown[] {
+  const dir = conversationsDir();
   let files: string[];
   try {
-    files = fs.readdirSync(conversationsDir()).filter((f) => f.endsWith(".json"));
+    files = fs.readdirSync(dir).filter((f) => f.endsWith(".json"));
   } catch {
     return [];
   }
-  const dir = conversationsDir();
-  const out: StoredConversation[] = [];
+  const out: unknown[] = [];
   for (const f of files) {
     try {
-      const one = sanitizeOne(JSON.parse(fs.readFileSync(path.join(dir, f), "utf8")));
-      if (one) out.push(one);
+      out.push(JSON.parse(fs.readFileSync(path.join(dir, f), "utf8")));
     } catch {
-      // Skip a single corrupt file rather than failing the whole load.
+      // Skip a single corrupt (unparseable) file rather than failing the load.
     }
   }
-  return out.sort((a, b) => Number(b.createdAt ?? 0) - Number(a.createdAt ?? 0));
+  return out;
 }
+
+// Created once per process; avoids a mkdir+chmod syscall on every streaming write.
+let dirEnsured = false;
 
 // Write one conversation to <id>.json. Transcripts can include contents the agent
 // Read from host files, so keep each file (and the directory) owner-only (chmod
 // every write — see settings.ts for the why).
 export function saveConversation(conversation: unknown): void {
-  const c = conversation as StoredConversation;
+  const c = conversation as { id?: unknown };
   if (!isSafeId(c?.id)) return;
   try {
     const dir = conversationsDir();
-    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    if (!dirEnsured) {
+      fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+      dirEnsured = true;
+    }
     const p = path.join(dir, `${c.id}.json`);
     fs.writeFileSync(p, JSON.stringify(conversation, null, 2), { mode: 0o600 });
     fs.chmodSync(p, 0o600);

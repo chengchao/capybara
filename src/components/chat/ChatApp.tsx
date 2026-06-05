@@ -41,15 +41,19 @@ export function ChatApp() {
   // list is known rather than flashing a stray empty conversation.
   useEffect(() => {
     let alive = true;
-    void loadConversations().then((loaded) => {
-      if (!alive) return;
-      const seeded = loaded.length > 0 ? loaded : [emptyConversation()];
-      // Seed the snapshot so hydration doesn't re-write every file it just read.
-      for (const c of seeded) savedRef.current.set(c.id, JSON.stringify(c));
-      setConversations(seeded);
-      setCurrentId(seeded[0].id);
-      setHydrated(true);
-    });
+    // A rejected load (IPC failure, missing bridge) must still render the app —
+    // fall back to an empty list rather than leaving it stuck on `return null`.
+    loadConversations()
+      .catch(() => [] as Conversation[])
+      .then((loaded) => {
+        if (!alive) return;
+        const seeded = loaded.length > 0 ? loaded : [emptyConversation()];
+        // Seed the snapshot so hydration doesn't re-write every file it just read.
+        for (const c of seeded) savedRef.current.set(c.id, JSON.stringify(c));
+        setConversations(seeded);
+        setCurrentId(seeded[0].id);
+        setHydrated(true);
+      });
     return () => {
       alive = false;
     };

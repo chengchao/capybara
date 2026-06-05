@@ -1,10 +1,55 @@
 import { expect, test } from "bun:test";
 
 import type { AgentEvent } from "./host";
-import { addUser, applyEvent, emptyConversation, originFor, resolveConsent } from "./transcript";
+import {
+  addUser,
+  applyEvent,
+  emptyConversation,
+  originFor,
+  parseStoredConversation,
+  resolveConsent,
+} from "./transcript";
 
 const fold = (events: AgentEvent[]) => events.reduce(applyEvent, emptyConversation());
 const T = "t1";
+
+test("parseStoredConversation accepts a well-formed record and round-trips it", () => {
+  const c = { ...emptyConversation("a", 7), status: "done" as const };
+  expect(parseStoredConversation(c)).toEqual(c);
+});
+
+test("parseStoredConversation settles a stale running status to done with no taskId", () => {
+  const c = { ...emptyConversation("a", 7), status: "running" as const, taskId: "t1" };
+  expect(parseStoredConversation(c)).toMatchObject({ id: "a", status: "done", taskId: null });
+});
+
+test("parseStoredConversation drops a partial file (missing items/grants) instead of crashing", () => {
+  // The exact shape that crashed the renderer before validation: valid JSON,
+  // no items/grants. Must be dropped (null), not passed through.
+  expect(parseStoredConversation({ id: "a", createdAt: 1, status: "done" })).toBeNull();
+});
+
+test("parseStoredConversation drops non-objects, bad ids, and bad nested shapes", () => {
+  expect(parseStoredConversation(null)).toBeNull();
+  expect(parseStoredConversation("oops")).toBeNull();
+  expect(parseStoredConversation(42)).toBeNull();
+  // id must be a string; createdAt must be a number.
+  expect(parseStoredConversation({ ...emptyConversation("a"), id: 5 })).toBeNull();
+  expect(parseStoredConversation({ ...emptyConversation("a"), createdAt: "nope" })).toBeNull();
+  // A structurally-wrong block deep in the tree is rejected too.
+  const badBlock = {
+    ...emptyConversation("a"),
+    items: [{ id: "i0", role: "assistant", blocks: [{ kind: "bogus" }] }],
+  };
+  expect(parseStoredConversation(badBlock)).toBeNull();
+});
+
+test("parseStoredConversation strips unknown top-level keys", () => {
+  const withExtra = { ...emptyConversation("a", 7), bonus: "remove me" };
+  const out = parseStoredConversation(withExtra);
+  expect(out).not.toBeNull();
+  expect(out as object).not.toHaveProperty("bonus");
+});
 
 test("origin: Bash routes to the VM, file tools to the host", () => {
   expect(originFor("Bash")).toBe("vm");
