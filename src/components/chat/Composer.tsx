@@ -4,10 +4,12 @@ import { Button } from "@/components/ui/button";
 
 export function Composer({
   running,
+  busy,
   onSend,
   onStop,
 }: {
-  running: boolean;
+  running: boolean; // this conversation's own task is in flight → show Stop
+  busy: boolean; // a task is running in another conversation → block sending here
   onSend: (text: string) => void;
   onStop: () => void;
 }) {
@@ -15,7 +17,7 @@ export function Composer({
 
   function submit() {
     const text = draft.trim();
-    if (!text || running) return;
+    if (!text || running || busy) return;
     setDraft("");
     onSend(text);
   }
@@ -28,7 +30,7 @@ export function Composer({
             rows={1}
             value={draft}
             placeholder="Message Capybara…"
-            disabled={running}
+            disabled={running || busy}
             onChange={(e) => setDraft(e.currentTarget.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
@@ -48,7 +50,7 @@ export function Composer({
               type="button"
               size="icon"
               aria-label="Send"
-              disabled={draft.trim() === ""}
+              disabled={draft.trim() === "" || busy}
               onClick={submit}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
@@ -60,6 +62,8 @@ export function Composer({
         <div className="mt-1.5 text-[11px] text-muted-foreground">
           {running ? (
             "Capybara is working…"
+          ) : busy ? (
+            "Finish or stop the running task to send here"
           ) : (
             <>
               <span className="font-medium text-foreground">Enter</span> to send ·{" "}
