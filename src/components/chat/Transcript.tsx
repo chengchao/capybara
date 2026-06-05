@@ -37,10 +37,17 @@ function Working() {
 
 export function Transcript({ conversation }: { conversation: Conversation }) {
   const ref = useRef<HTMLDivElement>(null);
+  // Stick to the bottom as events stream in, but not if the user has scrolled
+  // up to read earlier output. (A jump-to-latest affordance is a later PR.)
+  const stick = useRef(true);
   useEffect(() => {
     const el = ref.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (el && stick.current) el.scrollTop = el.scrollHeight;
   }, [conversation.items, conversation.status]);
+  const onScroll = () => {
+    const el = ref.current;
+    if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+  };
 
   if (conversation.items.length === 0) {
     return (
@@ -53,6 +60,7 @@ export function Transcript({ conversation }: { conversation: Conversation }) {
   return (
     <div
       ref={ref}
+      onScroll={onScroll}
       className="max-h-[28rem] space-y-4 overflow-auto rounded-md border bg-muted/30 p-4 text-left"
     >
       {conversation.items.map((it) => {
