@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import Settings from "@/components/Settings";
 import { cancelAgentTask, startAgentTask, subscribeAgentEvents } from "@/lib/agent";
@@ -14,7 +14,6 @@ export function ChatApp() {
   const [error, setError] = useState("");
   const [infoOpen, setInfoOpen] = useState(true);
   const vm = useVmStatus();
-  const taskId = useRef<string | null>(null);
 
   useEffect(() => subscribeAgentEvents((event) => setConvo((c) => applyEvent(c, event))), []);
 
@@ -24,15 +23,16 @@ export function ChatApp() {
     const resumeSessionId = convo.sessionId ?? undefined;
     setConvo((c) => addUser(c, text));
     try {
-      const { taskId: id } = await startAgentTask({ prompt: text, resumeSessionId });
-      taskId.current = id;
+      await startAgentTask({ prompt: text, resumeSessionId });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
   }
 
+  // The task id is captured from the event stream (set the instant the run goes
+  // `running`), so the Stop button never races a not-yet-set id.
   function stop() {
-    if (taskId.current) cancelAgentTask(taskId.current);
+    if (convo.taskId) void cancelAgentTask(convo.taskId);
   }
 
   function newTask() {

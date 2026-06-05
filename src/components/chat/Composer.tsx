@@ -39,7 +39,7 @@ export function Composer({
             className="max-h-40 flex-1 resize-none bg-transparent py-1.5 text-sm outline-none disabled:opacity-60"
           />
           {running ? (
-            <Button type="button" variant="destructive" aria-label="Stop" onClick={onStop}>
+            <Button type="button" variant="destructive" onClick={onStop}>
               <span className="size-2.5 rounded-[2px] bg-current" />
               Stop
             </Button>

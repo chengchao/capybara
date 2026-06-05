@@ -23,6 +23,13 @@ test("task_started / session_started / task_finished set top-level state", () =>
   expect(c.status).toBe("done");
 });
 
+test("task_started captures the taskId for cancellation", () => {
+  expect(emptyConversation().taskId).toBeNull();
+  const c = applyEvent(emptyConversation(), { event: "task_started", taskId: "task-9" });
+  expect(c.taskId).toBe("task-9");
+  expect(c.status).toBe("running");
+});
+
 test("assistant_message becomes a text block in an assistant turn", () => {
   const c = fold([{ event: "assistant_message", taskId: T, text: "Hello" }]);
   expect(c.items).toHaveLength(1);
