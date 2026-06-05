@@ -7,6 +7,7 @@ import { Transcript } from "./Transcript";
 export function ConversationView({
   conversation,
   running,
+  busy,
   error,
   infoOpen,
   onToggleInfo,
@@ -14,7 +15,8 @@ export function ConversationView({
   onStop,
 }: {
   conversation: Conversation;
-  running: boolean;
+  running: boolean; // this conversation's task is in flight
+  busy: boolean; // some conversation (this or another) has a task in flight
   error: string;
   infoOpen: boolean;
   onToggleInfo: () => void;
@@ -62,7 +64,7 @@ export function ConversationView({
         </div>
       )}
 
-      <Composer running={running} onSend={onSend} onStop={onStop} />
+      <Composer running={running} busy={busy && !running} onSend={onSend} onStop={onStop} />
     </section>
   );
 }

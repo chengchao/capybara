@@ -1,48 +1,101 @@
+import { z } from "zod";
+
 import type { AgentEvent } from "./host";
 
 // A conversation is the AgentEvent stream folded into a structured tree the UI
 // can render directly. `applyEvent` is pure — feed it events in order and it
 // builds turns, pairing tool_use ↔ tool_result by toolUseId. See
 // docs/frontend-implementation.html for the design.
+//
+// The zod schemas below are the single source of truth for the persisted shape:
+// the TS types are inferred from them, and the persistence layer validates every
+// record read back from disk against ConversationSchema (see
+// parseStoredConversation), dropping anything that doesn't match — so a corrupt,
+// truncated, or older-shape file can't reach the renderer and crash it.
 
-export type Origin = "host" | "vm";
+export const OriginSchema = z.enum(["host", "vm"]);
+export type Origin = z.infer<typeof OriginSchema>;
 
-export type TextBlock = { kind: "text"; id: string; text: string };
-export type ToolBlock = {
-  kind: "tool";
-  id: string; // the toolUseId
-  name: string;
-  origin: Origin;
-  input: unknown;
-  result?: unknown;
-  status: "running" | "done" | "error";
-};
-export type ConsentBlock = {
-  kind: "consent";
-  id: string; // the broker's requestId
-  path: string;
+const TextBlockSchema = z.object({
+  kind: z.literal("text"),
+  id: z.string(),
+  text: z.string(),
+});
+const ToolBlockSchema = z.object({
+  kind: z.literal("tool"),
+  id: z.string(), // the toolUseId
+  name: z.string(),
+  origin: OriginSchema,
+  input: z.unknown(),
+  result: z.unknown().optional(),
+  status: z.enum(["running", "done", "error"]),
+});
+const ConsentBlockSchema = z.object({
+  kind: z.literal("consent"),
+  id: z.string(), // the broker's requestId
+  path: z.string(),
   // "cancelled" = the task ended (finished or Stopped) while the prompt was
   // still pending, so the broker already resolved it as a deny — the card goes
   // inert rather than dangling with live Allow/Deny buttons.
-  state: "pending" | "allow" | "deny" | "cancelled";
-};
-export type Block = TextBlock | ToolBlock | ConsentBlock;
+  state: z.enum(["pending", "allow", "deny", "cancelled"]),
+});
+const BlockSchema = z.union([TextBlockSchema, ToolBlockSchema, ConsentBlockSchema]);
+export type TextBlock = z.infer<typeof TextBlockSchema>;
+export type ToolBlock = z.infer<typeof ToolBlockSchema>;
+export type ConsentBlock = z.infer<typeof ConsentBlockSchema>;
+export type Block = z.infer<typeof BlockSchema>;
 
-export type ServiceItem = { id: string; role: "service"; text: string };
-export type UserItem = { id: string; role: "user"; text: string };
-export type AssistantItem = { id: string; role: "assistant"; blocks: Block[] };
-export type Item = ServiceItem | UserItem | AssistantItem;
+const ServiceItemSchema = z.object({
+  id: z.string(),
+  role: z.literal("service"),
+  text: z.string(),
+});
+const UserItemSchema = z.object({ id: z.string(), role: z.literal("user"), text: z.string() });
+const AssistantItemSchema = z.object({
+  id: z.string(),
+  role: z.literal("assistant"),
+  blocks: z.array(BlockSchema),
+});
+const ItemSchema = z.union([ServiceItemSchema, UserItemSchema, AssistantItemSchema]);
+export type ServiceItem = z.infer<typeof ServiceItemSchema>;
+export type UserItem = z.infer<typeof UserItemSchema>;
+export type AssistantItem = z.infer<typeof AssistantItemSchema>;
+export type Item = z.infer<typeof ItemSchema>;
 
-export type Conversation = {
-  sessionId: string | null;
-  taskId: string | null; // the in-flight task, for cancellation
-  status: "idle" | "running" | "done";
-  items: Item[];
-  grants: string[]; // host directories the user has approved this conversation
-};
+export const ConversationSchema = z.object({
+  id: z.string(), // stable renderer-side key; survives resumes, present before sessionId
+  createdAt: z.number(), // epoch ms at creation; the history's newest-first sort key
+  sessionId: z.string().nullable(), // the SDK session, set on session_started; resume key
+  taskId: z.string().nullable(), // the in-flight task, for cancellation
+  status: z.enum(["idle", "running", "done"]),
+  items: z.array(ItemSchema),
+  grants: z.array(z.string()), // host directories the user has approved this conversation
+});
+export type Conversation = z.infer<typeof ConversationSchema>;
 
-export function emptyConversation(): Conversation {
-  return { sessionId: null, taskId: null, status: "idle", items: [], grants: [] };
+// `id` is the conversation's stable identity in the history list. It exists from
+// creation (the SDK sessionId only arrives once a task runs), so the list and the
+// event routing key off it, not sessionId. `createdAt` orders the list: with one
+// file per conversation on disk, readdir order is arbitrary, so the sort key has
+// to live in the data.
+export function emptyConversation(
+  id: string = crypto.randomUUID(),
+  createdAt: number = Date.now(),
+): Conversation {
+  return { id, createdAt, sessionId: null, taskId: null, status: "idle", items: [], grants: [] };
+}
+
+// Validate one record read back from disk against the schema, dropping it (null)
+// if the file is corrupt, partial, or an older shape — a malformed-but-parseable
+// file must not crash the history view. zod also strips unknown keys, normalizing
+// the result. A surviving record whose status is a stale "running" (its task
+// didn't outlive the process) is settled to "done" with no live taskId; that
+// lifecycle repair lives here because the renderer owns the Conversation shape.
+export function parseStoredConversation(raw: unknown): Conversation | null {
+  const parsed = ConversationSchema.safeParse(raw);
+  if (!parsed.success) return null;
+  const c = parsed.data;
+  return c.status === "running" ? { ...c, status: "done", taskId: null } : c;
 }
 
 // Bash is the only tool that leaves for the VM sandbox; the built-in file tools

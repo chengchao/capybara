@@ -11,14 +11,18 @@ function statusLine(c: Conversation): string {
 }
 
 export function Sidebar({
-  conversation,
+  conversations,
+  currentId,
   vm,
-  running,
+  busy,
+  onSelect,
   onNewTask,
 }: {
-  conversation: Conversation;
+  conversations: Conversation[];
+  currentId: string;
   vm: VmStatus;
-  running: boolean;
+  busy: boolean; // a task is running somewhere → block starting another
+  onSelect: (id: string) => void;
   onNewTask: () => void;
 }) {
   return (
@@ -36,8 +40,8 @@ export function Sidebar({
       <button
         type="button"
         onClick={onNewTask}
-        disabled={running}
-        title={running ? "Stop the running task first" : undefined}
+        disabled={busy}
+        title={busy ? "Stop the running task first" : undefined}
         className="mx-3 mb-3 flex h-9 items-center gap-2 rounded-md border border-agent/40 bg-agent/10 px-3 text-sm font-medium text-agent hover:bg-agent/15 disabled:pointer-events-none disabled:opacity-50"
       >
         <span className="text-base leading-none">+</span> New task
@@ -47,12 +51,26 @@ export function Sidebar({
         Recent
       </div>
       <div className="flex-1 overflow-auto px-2">
-        <div className="rounded-md bg-agent/10 px-3 py-2">
-          <div className="truncate text-sm font-medium text-agent">
-            {conversationTitle(conversation)}
-          </div>
-          <div className="text-xs text-muted-foreground">{statusLine(conversation)}</div>
-        </div>
+        {conversations.map((c) => {
+          const active = c.id === currentId;
+          return (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => onSelect(c.id)}
+              className={`mb-0.5 block w-full rounded-md px-3 py-2 text-left ${
+                active ? "bg-agent/10" : "hover:bg-muted"
+              }`}
+            >
+              <div
+                className={`truncate text-sm font-medium ${active ? "text-agent" : "text-foreground"}`}
+              >
+                {conversationTitle(c)}
+              </div>
+              <div className="text-xs text-muted-foreground">{statusLine(c)}</div>
+            </button>
+          );
+        })}
       </div>
 
       <div className="flex items-center gap-2 border-t px-4 py-2.5 text-xs text-muted-foreground">

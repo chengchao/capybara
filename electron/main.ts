@@ -5,6 +5,7 @@ import { app, BrowserWindow, ipcMain } from "electron";
 
 import { runAgentTask } from "./agent/runTask";
 import { respondConsent } from "./consent";
+import { loadConversations, saveConversation } from "./conversations";
 import { startLlmProxy, stopLlmProxy } from "./llmProxy";
 import { getAnthropicApiKey, hasStoredApiKey, setAnthropicApiKey } from "./settings";
 import { ensureVm, getVmStatus, setStatusEmitter, stopSupervisor, stopVm } from "./vm";
@@ -102,7 +103,19 @@ if (!gotLock) {
         (msg) => event.sender.send("agent-event", msg),
         controller,
         resumeSessionId,
-      ).finally(() => activeTasks.delete(taskId));
+      )
+        .catch((err: unknown) => {
+          // runAgentTask emits its own task_finished on normal completion and on
+          // handled errors, but a throw before that (e.g. the VM/supervisor failed
+          // to boot, which happens after task_started) would skip it and leave the
+          // renderer wedged in `running`. Always close the task out so the UI's
+          // `busy` lock clears, surfacing the reason.
+          if (event.sender.isDestroyed()) return;
+          const text = `error: ${err instanceof Error ? err.message : String(err)}`;
+          event.sender.send("agent-event", { event: "assistant_message", taskId, text });
+          event.sender.send("agent-event", { event: "task_finished", taskId });
+        })
+        .finally(() => activeTasks.delete(taskId));
       return { taskId };
     },
   );
@@ -114,6 +127,11 @@ if (!gotLock) {
   ipcMain.handle("respond-consent", (_event, args: { requestId?: unknown; allow?: unknown }) => {
     if (typeof args?.requestId === "string") respondConsent(args.requestId, args.allow === true);
   });
+
+  ipcMain.handle("get-conversations", () => loadConversations());
+  ipcMain.handle("save-conversation", (_event, conversation: unknown) =>
+    saveConversation(conversation),
+  );
 
   app.whenReady().then(async () => {
     // Start the loopback LLM proxy before anything can launch an agent task,

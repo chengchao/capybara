@@ -1,3 +1,5 @@
+import type { Conversation } from "./transcript";
+
 declare global {
   interface Window {
     capybara: {
@@ -10,6 +12,10 @@ declare global {
       respondConsent: (requestId: string, allow: boolean) => Promise<void>;
       getSettings: () => Promise<ApiKeyState>;
       setAnthropicApiKey: (key: string) => Promise<ApiKeyState>;
+      // Returns raw, unvalidated records straight from disk; the renderer's
+      // conversationStore validates each against the schema before use.
+      getConversations: () => Promise<unknown[]>;
+      saveConversation: (conversation: Conversation) => Promise<void>;
       onVmStatus: (callback: (status: VmStatus) => void) => () => void;
       onAgentEvent: (callback: (event: AgentEvent) => void) => () => void;
     };
