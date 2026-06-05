@@ -11,6 +11,7 @@ export function ConversationView({
   infoOpen,
   onToggleInfo,
   onSend,
+  onStop,
 }: {
   conversation: Conversation;
   running: boolean;
@@ -18,6 +19,7 @@ export function ConversationView({
   infoOpen: boolean;
   onToggleInfo: () => void;
   onSend: (text: string) => void;
+  onStop: () => void;
 }) {
   const subtitle = running ? "running…" : conversation.items.length > 0 ? "finished" : "ready";
   return (
@@ -60,7 +62,7 @@ export function ConversationView({
         </div>
       )}
 
-      <Composer running={running} onSend={onSend} />
+      <Composer running={running} onSend={onSend} onStop={onStop} />
     </section>
   );
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 import Settings from "@/components/Settings";
-import { startAgentTask, subscribeAgentEvents } from "@/lib/agent";
+import { cancelAgentTask, startAgentTask, subscribeAgentEvents } from "@/lib/agent";
 import { addUser, applyEvent, emptyConversation } from "@/lib/transcript";
 import { useVmStatus } from "@/lib/vm";
 
@@ -29,6 +29,12 @@ export function ChatApp() {
     }
   }
 
+  // The task id is captured from the event stream (set the instant the run goes
+  // `running`), so the Stop button never races a not-yet-set id.
+  function stop() {
+    if (convo.taskId) void cancelAgentTask(convo.taskId);
+  }
+
   function newTask() {
     setConvo(emptyConversation());
     setError("");
@@ -49,6 +55,7 @@ export function ChatApp() {
         infoOpen={infoOpen}
         onToggleInfo={() => setInfoOpen((v) => !v)}
         onSend={send}
+        onStop={stop}
       />
       {infoOpen && <InfoPane conversation={convo} vm={vm} onClose={() => setInfoOpen(false)} />}
       <Settings />

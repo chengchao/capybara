@@ -26,12 +26,13 @@ export type Item = ServiceItem | UserItem | AssistantItem;
 
 export type Conversation = {
   sessionId: string | null;
+  taskId: string | null; // the in-flight task, for cancellation
   status: "idle" | "running" | "done";
   items: Item[];
 };
 
 export function emptyConversation(): Conversation {
-  return { sessionId: null, status: "idle", items: [] };
+  return { sessionId: null, taskId: null, status: "idle", items: [] };
 }
 
 // Bash is the only tool that leaves for the VM sandbox; the built-in file tools
@@ -82,7 +83,7 @@ function updateTool(c: Conversation, id: string, result: unknown, isError: boole
 export function applyEvent(c: Conversation, e: AgentEvent): Conversation {
   switch (e.event) {
     case "task_started":
-      return { ...c, status: "running" };
+      return { ...c, status: "running", taskId: e.taskId };
     case "session_started":
       return { ...c, sessionId: e.sessionId };
     case "assistant_message":

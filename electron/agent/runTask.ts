@@ -257,11 +257,15 @@ export async function runAgentTask(
       relay(taskId, message, emit);
     }
   } catch (error) {
-    emit({
-      event: "assistant_message",
-      taskId,
-      text: `error: ${(error as Error).message}`,
-    });
+    // A user-initiated Stop aborts the query — that's not an error to surface;
+    // the turn just ends. Anything else is a real failure worth showing.
+    if (!abortController?.signal.aborted) {
+      emit({
+        event: "assistant_message",
+        taskId,
+        text: `error: ${(error as Error).message}`,
+      });
+    }
   }
   emit({ event: "task_finished", taskId, sessionId: sessionId ?? undefined });
 }

@@ -5,9 +5,11 @@ import { Button } from "@/components/ui/button";
 export function Composer({
   running,
   onSend,
+  onStop,
 }: {
   running: boolean;
   onSend: (text: string) => void;
+  onStop: () => void;
 }) {
   const [draft, setDraft] = useState("");
 
@@ -36,17 +38,24 @@ export function Composer({
             }}
             className="max-h-40 flex-1 resize-none bg-transparent py-1.5 text-sm outline-none disabled:opacity-60"
           />
-          <Button
-            type="button"
-            size="icon"
-            aria-label="Send"
-            disabled={running || draft.trim() === ""}
-            onClick={submit}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-              <path d="M5 12h14M13 6l6 6-6 6" />
-            </svg>
-          </Button>
+          {running ? (
+            <Button type="button" variant="destructive" onClick={onStop}>
+              <span className="size-2.5 rounded-[2px] bg-current" />
+              Stop
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="icon"
+              aria-label="Send"
+              disabled={draft.trim() === ""}
+              onClick={submit}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <path d="M5 12h14M13 6l6 6-6 6" />
+              </svg>
+            </Button>
+          )}
         </div>
         <div className="mt-1.5 text-[11px] text-muted-foreground">
           {running ? (
