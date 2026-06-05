@@ -7,6 +7,7 @@ declare global {
         resumeSessionId?: string;
       }) => Promise<{ taskId: string }>;
       cancelAgentTask: (taskId: string) => Promise<void>;
+      respondConsent: (requestId: string, allow: boolean) => Promise<void>;
       getSettings: () => Promise<ApiKeyState>;
       setAnthropicApiKey: (key: string) => Promise<ApiKeyState>;
       onVmStatus: (callback: (status: VmStatus) => void) => () => void;
@@ -44,4 +45,10 @@ export type AgentEvent =
       content: unknown;
       isError: boolean;
     }
-  | { event: "task_finished"; taskId: string; sessionId?: string };
+  | { event: "task_finished"; taskId: string; sessionId?: string }
+  // Not part of a task's emit stream — the consent broker (electron/consent.ts)
+  // sends these to the renderer: `consent_request` drives an inline Allow/Deny
+  // prompt; `grant_added` reports a folder main actually recorded (normalized
+  // path) so the renderer's grant list mirrors main's authoritative store.
+  | { event: "consent_request"; requestId: string; path: string }
+  | { event: "grant_added"; path: string };

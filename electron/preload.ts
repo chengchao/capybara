@@ -7,6 +7,8 @@ const api = {
   startAgentTask: (args: { prompt: string; resumeSessionId?: string }) =>
     ipcRenderer.invoke("start-agent-task", args),
   cancelAgentTask: (taskId: string) => ipcRenderer.invoke("cancel-agent-task", taskId),
+  respondConsent: (requestId: string, allow: boolean) =>
+    ipcRenderer.invoke("respond-consent", { requestId, allow }),
   getSettings: () => ipcRenderer.invoke("get-settings"),
   setAnthropicApiKey: (key: string) => ipcRenderer.invoke("set-anthropic-api-key", key),
   onVmStatus: (callback: (status: unknown) => void): Unsubscribe => {

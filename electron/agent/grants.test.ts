@@ -104,8 +104,8 @@ test("granting the filesystem root covers all subpaths", () => {
   expect(read("/anything/deep/x")).toEqual({ allow: true });
 });
 
-test("grantDirectory reports whether it stored a grant", () => {
-  expect(grantDirectory(S, "/abs/dir")).toBe(true);
-  expect(grantDirectory(S, "relative/dir")).toBe(false);
-  expect(grantDirectory(S, "")).toBe(false);
+test("grantDirectory returns the normalized stored path, or null", () => {
+  expect(grantDirectory(S, "/abs/dir")).toBe("/abs/dir");
+  expect(grantDirectory(S, "relative/dir")).toBeNull();
+  expect(grantDirectory(S, "")).toBeNull();
 });

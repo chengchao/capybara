@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 
 import type { AgentEvent } from "./host";
-import { addUser, applyEvent, emptyConversation, originFor } from "./transcript";
+import { addUser, applyEvent, emptyConversation, originFor, resolveConsent } from "./transcript";
 
 const fold = (events: AgentEvent[]) => events.reduce(applyEvent, emptyConversation());
 const T = "t1";
@@ -111,4 +111,58 @@ test("a realistic run folds into user → assistant(text, tool, text)", () => {
   expect(c.status).toBe("done");
   const turn = c.items[0] as { blocks: Array<{ kind: string }> };
   expect(turn.blocks.map((b) => b.kind)).toEqual(["text", "tool", "text"]);
+});
+
+test("consent_request becomes a pending consent block", () => {
+  const c = fold([{ event: "consent_request", requestId: "c1", path: "/Users/x/Desktop" }]);
+  const turn = c.items[0] as { blocks: Array<Record<string, unknown>> };
+  expect(turn.blocks[0]).toMatchObject({
+    kind: "consent",
+    id: "c1",
+    path: "/Users/x/Desktop",
+    state: "pending",
+  });
+});
+
+test("grant_added records main's normalized path on grants (deduped)", () => {
+  const c = fold([
+    { event: "grant_added", path: "/Users/x/Desktop" },
+    { event: "grant_added", path: "/Users/x/Desktop" },
+    { event: "grant_added", path: "/Users/x/Downloads" },
+  ]);
+  expect(c.grants).toEqual(["/Users/x/Desktop", "/Users/x/Downloads"]);
+});
+
+test("allowing a consent flips the card but does not itself grant", () => {
+  // The folder enters `grants` only via main's grant_added, not the local flip.
+  let c = fold([{ event: "consent_request", requestId: "c1", path: "/Users/x/Desktop" }]);
+  c = resolveConsent(c, "c1", "allow");
+  expect(c.grants).toEqual([]);
+  const turn = c.items[0] as { blocks: Array<Record<string, unknown>> };
+  expect(turn.blocks[0]).toMatchObject({ state: "allow" });
+});
+
+test("denying a consent resolves the card without granting", () => {
+  let c = fold([{ event: "consent_request", requestId: "c1", path: "/Users/x/Desktop" }]);
+  c = resolveConsent(c, "c1", "deny");
+  expect(c.grants).toEqual([]);
+  const turn = c.items[0] as { blocks: Array<Record<string, unknown>> };
+  expect(turn.blocks[0]).toMatchObject({ state: "deny" });
+});
+
+test("task_finished retires a still-pending consent card to cancelled", () => {
+  const c = fold([
+    { event: "consent_request", requestId: "c1", path: "/Users/x/Desktop" },
+    { event: "task_finished", taskId: T },
+  ]);
+  const turn = c.items[0] as { blocks: Array<Record<string, unknown>> };
+  expect(turn.blocks[0]).toMatchObject({ kind: "consent", state: "cancelled" });
+});
+
+test("task_finished leaves an already-answered consent card untouched", () => {
+  let c = fold([{ event: "consent_request", requestId: "c1", path: "/Users/x/Desktop" }]);
+  c = resolveConsent(c, "c1", "allow");
+  c = applyEvent(c, { event: "task_finished", taskId: T });
+  const turn = c.items[0] as { blocks: Array<Record<string, unknown>> };
+  expect(turn.blocks[0]).toMatchObject({ state: "allow" });
 });

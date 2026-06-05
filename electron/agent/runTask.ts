@@ -6,7 +6,13 @@ import { app } from "electron";
 import { getLlmProxy } from "../llmProxy";
 import { getAnthropicApiKey, hasStoredApiKey } from "../settings";
 import { getSupervisor } from "../vm";
-import { ALLOWED_TOOLS, BUILTIN_TOOLS, DISALLOWED_TOOLS, TOOL_PREFIX } from "./allowedTools";
+import {
+  ALLOWED_TOOLS,
+  BUILTIN_TOOLS,
+  DISALLOWED_TOOLS,
+  REQUEST_DIRECTORY_TOOL,
+  TOOL_PREFIX,
+} from "./allowedTools";
 import { evaluateFileTool } from "./grants";
 import { buildTools } from "./tools";
 
@@ -32,7 +38,10 @@ export type AgentEvent =
       content: unknown;
       isError: boolean;
     }
-  | { event: "task_finished"; taskId: string; sessionId?: string };
+  | { event: "task_finished"; taskId: string; sessionId?: string }
+  // Emitted by the consent broker (electron/consent.ts), not this task's `emit`.
+  | { event: "consent_request"; requestId: string; path: string }
+  | { event: "grant_added"; path: string };
 
 type AgentEventEmitter = (event: AgentEvent) => void;
 
@@ -96,10 +105,16 @@ function relay(taskId: string, message: unknown, emit: AgentEventEmitter) {
       if (block.type === "text" && typeof block.text === "string") {
         emit({ event: "assistant_message", taskId, text: block.text });
       } else if (block.type === "tool_use") {
+        const tool = stripToolPrefix(block.name ?? "");
+        // The consent tool's call/result are represented by the inline consent
+        // card (driven by the broker's `consent_request`), so don't surface it as
+        // a tool card too. Suppressing here keeps the renderer free of the magic
+        // tool name.
+        if (tool === REQUEST_DIRECTORY_TOOL) continue;
         emit({
           event: "tool_use",
           taskId,
-          tool: stripToolPrefix(block.name ?? ""),
+          tool,
           input: block.input,
           toolUseId: block.id ?? "",
         });
@@ -174,11 +189,16 @@ export async function runAgentTask(
   try {
     const mcp = createSdkMcpServer({
       name: "capybara",
-      tools: buildTools(supervisor, resolveSession, () => {
-        if (!sessionId)
-          throw new Error("folder grant requested before the SDK session was initialized");
-        return sessionId;
-      }),
+      tools: buildTools(
+        supervisor,
+        resolveSession,
+        () => {
+          if (!sessionId)
+            throw new Error("folder grant requested before the SDK session was initialized");
+          return sessionId;
+        },
+        abortController?.signal,
+      ),
     });
     ensureBundledBunOnPath();
     const claudeBinary = resolveClaudeBinary();

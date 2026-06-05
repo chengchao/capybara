@@ -1,12 +1,15 @@
 export const TOOL_PREFIX = "mcp__capybara__";
 
+// The MCP consent tool the model calls to unlock a host folder after the
+// PreToolUse hook denies it. Single source of truth — tools.ts names the tool,
+// runTask's relay suppresses its tool_use so only the inline consent card shows.
+export const REQUEST_DIRECTORY_TOOL = "request_capybara_directory";
+
 // Bash routes through our in-process MCP server into the VM sandbox; Read,
-// Glob, and Write are the SDK's built-in tools running natively on the host;
-// request_capybara_directory is the MCP consent tool the model calls to unlock
-// a host folder after the PreToolUse hook denies it.
+// Glob, and Write are the SDK's built-in tools running natively on the host.
 export const ALLOWED_TOOLS = [
   TOOL_PREFIX + "Bash",
-  TOOL_PREFIX + "request_capybara_directory",
+  TOOL_PREFIX + REQUEST_DIRECTORY_TOOL,
   "Read",
   "Glob",
   "Write",
