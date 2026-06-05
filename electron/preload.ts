@@ -11,6 +11,9 @@ const api = {
     ipcRenderer.invoke("respond-consent", { requestId, allow }),
   getSettings: () => ipcRenderer.invoke("get-settings"),
   setAnthropicApiKey: (key: string) => ipcRenderer.invoke("set-anthropic-api-key", key),
+  getConversations: () => ipcRenderer.invoke("get-conversations"),
+  saveConversations: (conversations: unknown) =>
+    ipcRenderer.invoke("save-conversations", conversations),
   onVmStatus: (callback: (status: unknown) => void): Unsubscribe => {
     const listener = (_event: IpcRendererEvent, status: unknown) => callback(status);
     ipcRenderer.on("vm-status", listener);

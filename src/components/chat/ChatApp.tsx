@@ -3,7 +3,13 @@ import { useEffect, useRef, useState } from "react";
 import Settings from "@/components/Settings";
 import { cancelAgentTask, respondConsent, startAgentTask, subscribeAgentEvents } from "@/lib/agent";
 import { loadConversations, saveConversations } from "@/lib/conversationStore";
-import { addUser, applyEvent, emptyConversation, resolveConsent } from "@/lib/transcript";
+import {
+  addUser,
+  applyEvent,
+  type Conversation,
+  emptyConversation,
+  resolveConsent,
+} from "@/lib/transcript";
 import { useVmStatus } from "@/lib/vm";
 
 import { ConsentProvider } from "./consent-context";
@@ -11,16 +17,10 @@ import { ConversationView } from "./ConversationView";
 import { InfoPane } from "./InfoPane";
 import { Sidebar } from "./Sidebar";
 
-// Rehydrate the history list, always seeding at least one (empty) conversation so
-// the UI has something to show on first run.
-function initialConversations() {
-  const loaded = loadConversations();
-  return loaded.length > 0 ? loaded : [emptyConversation()];
-}
-
 export function ChatApp() {
-  const [conversations, setConversations] = useState(initialConversations);
-  const [currentId, setCurrentId] = useState(() => conversations[0].id);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [currentId, setCurrentId] = useState("");
+  const [hydrated, setHydrated] = useState(false);
   const [error, setError] = useState("");
   const [infoOpen, setInfoOpen] = useState(true);
   const vm = useVmStatus();
@@ -31,7 +31,31 @@ export function ChatApp() {
   // (not state) because the subscription closure must read the latest value.
   const runningIdRef = useRef<string | null>(null);
 
-  useEffect(() => saveConversations(conversations), [conversations]);
+  // Hydrate from the on-disk store once, seeding an empty conversation on first
+  // run. Async (the store is a main-process JSON file), so the UI holds until the
+  // list is known rather than flashing a stray empty conversation.
+  useEffect(() => {
+    let alive = true;
+    void loadConversations().then((loaded) => {
+      if (!alive) return;
+      const seeded = loaded.length > 0 ? loaded : [emptyConversation()];
+      setConversations(seeded);
+      setCurrentId(seeded[0].id);
+      setHydrated(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // Persist on change, debounced: a streaming task mutates the conversation on
+  // every event, and each disk write is a main-process syscall over the whole
+  // file — so coalesce bursts instead of writing per event.
+  useEffect(() => {
+    if (!hydrated) return;
+    const t = setTimeout(() => void saveConversations(conversations), 400);
+    return () => clearTimeout(t);
+  }, [conversations, hydrated]);
 
   useEffect(
     () =>
@@ -43,6 +67,9 @@ export function ChatApp() {
       }),
     [],
   );
+
+  // Hold the chrome until hydration settles (a sub-frame on a local file read).
+  if (!hydrated) return null;
 
   const convo = conversations.find((c) => c.id === currentId) ?? conversations[0];
   const busy = conversations.some((c) => c.status === "running");
