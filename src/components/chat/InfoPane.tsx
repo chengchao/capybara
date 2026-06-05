@@ -1,3 +1,4 @@
+import { modelLabel } from "@/lib/models";
 import type { Conversation } from "@/lib/transcript";
 import { toolCounts } from "@/lib/transcript";
 import type { VmStatus } from "@/lib/vm";
@@ -39,10 +40,12 @@ function vmLabel(vm: VmStatus): { dot: string; text: string } {
 export function InfoPane({
   conversation,
   vm,
+  model,
   onClose,
 }: {
   conversation: Conversation;
   vm: VmStatus;
+  model: string;
   onClose: () => void;
 }) {
   const counts = toolCounts(conversation);
@@ -88,7 +91,7 @@ export function InfoPane({
 
       <Section title="Session">
         <Row k="ID" v={conversation.sessionId ? `${conversation.sessionId.slice(0, 8)}…` : "—"} />
-        <Row k="Model" v="claude-sonnet-4-6" />
+        <Row k="Model" v={model ? modelLabel(model) : "—"} />
       </Section>
 
       <Section title="Sandbox">

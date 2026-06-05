@@ -1,11 +1,15 @@
-import type { ApiKeyState } from "./host";
+import type { SettingsState } from "./host";
 
-export type { ApiKeyState };
+export type { SettingsState };
 
-export function getSettings(): Promise<ApiKeyState> {
+export function getSettings(): Promise<SettingsState> {
   return window.capybara.getSettings();
 }
 
-export function setAnthropicApiKey(key: string): Promise<ApiKeyState> {
+export function setAnthropicApiKey(key: string): Promise<SettingsState> {
   return window.capybara.setAnthropicApiKey(key);
+}
+
+export function setModel(model: string): Promise<SettingsState> {
+  return window.capybara.setModel(model);
 }

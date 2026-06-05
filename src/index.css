@@ -138,3 +138,87 @@
     @apply font-sans;
   }
 }
+
+/* Syntax highlighting (highlight.js). We don't import a hljs theme; instead the
+   token classes are colored here so code blocks follow the app's light/dark
+   theme. Base text/background come from the surrounding <pre>. */
+.hljs-comment,
+.hljs-quote {
+  color: var(--muted-foreground);
+  font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-type {
+  color: #9333ea;
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-meta .hljs-string {
+  color: #15803d;
+}
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet {
+  color: #c2410c;
+}
+.hljs-title,
+.hljs-title.function_,
+.hljs-section {
+  color: #2563eb;
+}
+.hljs-attr,
+.hljs-attribute,
+.hljs-variable,
+.hljs-template-variable {
+  color: #0e7490;
+}
+.hljs-built_in,
+.hljs-class .hljs-title {
+  color: #b45309;
+}
+.hljs-deletion {
+  color: #dc2626;
+}
+.hljs-addition {
+  color: #15803d;
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: 600;
+}
+
+.dark .hljs-keyword,
+.dark .hljs-selector-tag,
+.dark .hljs-literal,
+.dark .hljs-type {
+  color: #c084fc;
+}
+.dark .hljs-string,
+.dark .hljs-regexp,
+.dark .hljs-meta .hljs-string {
+  color: #4ade80;
+}
+.dark .hljs-number,
+.dark .hljs-symbol,
+.dark .hljs-bullet {
+  color: #fb923c;
+}
+.dark .hljs-title,
+.dark .hljs-title.function_,
+.dark .hljs-section {
+  color: #60a5fa;
+}
+.dark .hljs-attr,
+.dark .hljs-attribute,
+.dark .hljs-variable,
+.dark .hljs-template-variable {
+  color: #22d3ee;
+}
+.dark .hljs-built_in,
+.dark .hljs-class .hljs-title {
+  color: #fbbf24;
+}

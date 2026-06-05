@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Settings from "@/components/Settings";
 import { cancelAgentTask, respondConsent, startAgentTask, subscribeAgentEvents } from "@/lib/agent";
 import { loadConversations, saveConversation } from "@/lib/conversationStore";
+import { getSettings } from "@/lib/settings";
 import {
   addUser,
   applyEvent,
@@ -23,7 +24,16 @@ export function ChatApp() {
   const [hydrated, setHydrated] = useState(false);
   const [error, setError] = useState("");
   const [infoOpen, setInfoOpen] = useState(true);
+  // The effective agent model, owned here so Settings (which changes it) and the
+  // InfoPane (which displays it) stay in sync. Empty until the first fetch.
+  const [model, setModel] = useState("");
   const vm = useVmStatus();
+
+  useEffect(() => {
+    getSettings()
+      .then((s) => setModel(s.model))
+      .catch(() => {});
+  }, []);
 
   // The conversation that owns the in-flight task. Set synchronously at send()
   // time — before any event arrives — so the event stream routes deterministically
@@ -212,8 +222,10 @@ export function ChatApp() {
           onSend={send}
           onStop={stop}
         />
-        {infoOpen && <InfoPane conversation={convo} vm={vm} onClose={() => setInfoOpen(false)} />}
-        <Settings />
+        {infoOpen && (
+          <InfoPane conversation={convo} vm={vm} model={model} onClose={() => setInfoOpen(false)} />
+        )}
+        <Settings model={model} onModelChange={setModel} />
       </div>
     </ConsentProvider>
   );

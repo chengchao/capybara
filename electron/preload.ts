@@ -11,6 +11,7 @@ const api = {
     ipcRenderer.invoke("respond-consent", { requestId, allow }),
   getSettings: () => ipcRenderer.invoke("get-settings"),
   setAnthropicApiKey: (key: string) => ipcRenderer.invoke("set-anthropic-api-key", key),
+  setModel: (model: string) => ipcRenderer.invoke("set-model", model),
   getConversations: () => ipcRenderer.invoke("get-conversations"),
   saveConversation: (conversation: unknown) =>
     ipcRenderer.invoke("save-conversation", conversation),

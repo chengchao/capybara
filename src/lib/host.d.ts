@@ -10,8 +10,9 @@ declare global {
       }) => Promise<{ taskId: string }>;
       cancelAgentTask: (taskId: string) => Promise<void>;
       respondConsent: (requestId: string, allow: boolean) => Promise<void>;
-      getSettings: () => Promise<ApiKeyState>;
-      setAnthropicApiKey: (key: string) => Promise<ApiKeyState>;
+      getSettings: () => Promise<SettingsState>;
+      setAnthropicApiKey: (key: string) => Promise<SettingsState>;
+      setModel: (model: string) => Promise<SettingsState>;
       // Returns raw, unvalidated records straight from disk; the renderer's
       // conversationStore validates each against the schema before use.
       getConversations: () => Promise<unknown[]>;
@@ -22,10 +23,11 @@ declare global {
   }
 }
 
-export type ApiKeyState = {
+export type SettingsState = {
   hasApiKey: boolean;
   apiKeyPreview: string | null;
   unreadable: boolean;
+  model: string; // the effective agent model (chosen, env override, or default)
 };
 
 export type VmStatus =

@@ -31,11 +31,19 @@ test("a backticked glob is code, not mangled", () => {
   ]);
 });
 
-test("splitFences separates code from prose and trims the lang + trailing newline", () => {
+test("splitFences separates code from prose, capturing the lang and trimming it", () => {
   expect(splitFences("before ```js\nconst x = 1;\n``` after")).toEqual([
     { code: false, value: "before " },
-    { code: true, value: "const x = 1;" },
+    { code: true, lang: "js", value: "const x = 1;" },
     { code: false, value: " after" },
+  ]);
+});
+
+test("splitFences leaves lang undefined for a bare fence", () => {
+  expect(splitFences("```\nplain\n```")).toEqual([
+    { code: false, value: "" },
+    { code: true, lang: undefined, value: "plain" },
+    { code: false, value: "" },
   ]);
 });
 
