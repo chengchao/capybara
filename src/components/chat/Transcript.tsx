@@ -51,24 +51,22 @@ export function Transcript({ conversation }: { conversation: Conversation }) {
 
   if (conversation.items.length === 0) {
     return (
-      <div className="rounded-md border bg-muted/30 p-6 text-center text-sm text-muted-foreground">
-        No messages yet — run a task to begin.
+      <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
+        Nothing yet — describe a task below and Capybara will get to work.
       </div>
     );
   }
 
   return (
-    <div
-      ref={ref}
-      onScroll={onScroll}
-      className="max-h-[28rem] space-y-4 overflow-auto rounded-md border bg-muted/30 p-4 text-left"
-    >
-      {conversation.items.map((it) => {
-        if (it.role === "user") return <UserMessage key={it.id} text={it.text} />;
-        if (it.role === "service") return <ServiceMessage key={it.id} text={it.text} />;
-        return <AssistantTurn key={it.id} item={it} />;
-      })}
-      {conversation.status === "running" && <Working />}
+    <div ref={ref} onScroll={onScroll} className="h-full overflow-auto px-5 py-5 text-left">
+      <div className="mx-auto max-w-3xl space-y-4">
+        {conversation.items.map((it) => {
+          if (it.role === "user") return <UserMessage key={it.id} text={it.text} />;
+          if (it.role === "service") return <ServiceMessage key={it.id} text={it.text} />;
+          return <AssistantTurn key={it.id} item={it} />;
+        })}
+        {conversation.status === "running" && <Working />}
+      </div>
     </div>
   );
 }
