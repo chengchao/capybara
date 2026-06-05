@@ -5,7 +5,7 @@ import { app, BrowserWindow, ipcMain } from "electron";
 
 import { runAgentTask } from "./agent/runTask";
 import { respondConsent } from "./consent";
-import { loadConversations, saveConversations } from "./conversations";
+import { loadConversations, saveConversation } from "./conversations";
 import { startLlmProxy, stopLlmProxy } from "./llmProxy";
 import { getAnthropicApiKey, hasStoredApiKey, setAnthropicApiKey } from "./settings";
 import { ensureVm, getVmStatus, setStatusEmitter, stopSupervisor, stopVm } from "./vm";
@@ -117,8 +117,8 @@ if (!gotLock) {
   });
 
   ipcMain.handle("get-conversations", () => loadConversations());
-  ipcMain.handle("save-conversations", (_event, conversations: unknown) =>
-    saveConversations(conversations),
+  ipcMain.handle("save-conversation", (_event, conversation: unknown) =>
+    saveConversation(conversation),
   );
 
   app.whenReady().then(async () => {

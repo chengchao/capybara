@@ -35,6 +35,7 @@ export type Item = ServiceItem | UserItem | AssistantItem;
 
 export type Conversation = {
   id: string; // stable renderer-side key; survives across resumes, present before sessionId
+  createdAt: number; // epoch ms at creation; the history's newest-first sort key
   sessionId: string | null; // the SDK session, set on session_started; resume key
   taskId: string | null; // the in-flight task, for cancellation
   status: "idle" | "running" | "done";
@@ -44,9 +45,14 @@ export type Conversation = {
 
 // `id` is the conversation's stable identity in the history list. It exists from
 // creation (the SDK sessionId only arrives once a task runs), so the list and the
-// event routing key off it, not sessionId.
-export function emptyConversation(id: string = crypto.randomUUID()): Conversation {
-  return { id, sessionId: null, taskId: null, status: "idle", items: [], grants: [] };
+// event routing key off it, not sessionId. `createdAt` orders the list: with one
+// file per conversation on disk, readdir order is arbitrary, so the sort key has
+// to live in the data.
+export function emptyConversation(
+  id: string = crypto.randomUUID(),
+  createdAt: number = Date.now(),
+): Conversation {
+  return { id, createdAt, sessionId: null, taskId: null, status: "idle", items: [], grants: [] };
 }
 
 // Bash is the only tool that leaves for the VM sandbox; the built-in file tools

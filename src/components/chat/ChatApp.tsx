@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import Settings from "@/components/Settings";
 import { cancelAgentTask, respondConsent, startAgentTask, subscribeAgentEvents } from "@/lib/agent";
-import { loadConversations, saveConversations } from "@/lib/conversationStore";
+import { loadConversations, saveConversation } from "@/lib/conversationStore";
 import {
   addUser,
   applyEvent,
@@ -31,14 +31,21 @@ export function ChatApp() {
   // (not state) because the subscription closure must read the latest value.
   const runningIdRef = useRef<string | null>(null);
 
+  // Serialized snapshot of what's on disk, keyed by conversation id, so the
+  // persist effect can write only the conversations that actually changed (one
+  // file each) rather than rewriting the whole history.
+  const savedRef = useRef(new Map<string, string>());
+
   // Hydrate from the on-disk store once, seeding an empty conversation on first
-  // run. Async (the store is a main-process JSON file), so the UI holds until the
+  // run. Async (the store is a main-process directory), so the UI holds until the
   // list is known rather than flashing a stray empty conversation.
   useEffect(() => {
     let alive = true;
     void loadConversations().then((loaded) => {
       if (!alive) return;
       const seeded = loaded.length > 0 ? loaded : [emptyConversation()];
+      // Seed the snapshot so hydration doesn't re-write every file it just read.
+      for (const c of seeded) savedRef.current.set(c.id, JSON.stringify(c));
       setConversations(seeded);
       setCurrentId(seeded[0].id);
       setHydrated(true);
@@ -48,12 +55,19 @@ export function ChatApp() {
     };
   }, []);
 
-  // Persist on change, debounced: a streaming task mutates the conversation on
-  // every event, and each disk write is a main-process syscall over the whole
-  // file — so coalesce bursts instead of writing per event.
+  // Persist changed conversations, debounced: a streaming task mutates its
+  // conversation on every event, so coalesce the burst, then write only the files
+  // whose content differs from the last-saved snapshot.
   useEffect(() => {
     if (!hydrated) return;
-    const t = setTimeout(() => void saveConversations(conversations), 400);
+    const t = setTimeout(() => {
+      for (const c of conversations) {
+        const json = JSON.stringify(c);
+        if (savedRef.current.get(c.id) === json) continue;
+        savedRef.current.set(c.id, json);
+        void saveConversation(c);
+      }
+    }, 400);
     return () => clearTimeout(t);
   }, [conversations, hydrated]);
 

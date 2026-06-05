@@ -12,8 +12,8 @@ const api = {
   getSettings: () => ipcRenderer.invoke("get-settings"),
   setAnthropicApiKey: (key: string) => ipcRenderer.invoke("set-anthropic-api-key", key),
   getConversations: () => ipcRenderer.invoke("get-conversations"),
-  saveConversations: (conversations: unknown) =>
-    ipcRenderer.invoke("save-conversations", conversations),
+  saveConversation: (conversation: unknown) =>
+    ipcRenderer.invoke("save-conversation", conversation),
   onVmStatus: (callback: (status: unknown) => void): Unsubscribe => {
     const listener = (_event: IpcRendererEvent, status: unknown) => callback(status);
     ipcRenderer.on("vm-status", listener);

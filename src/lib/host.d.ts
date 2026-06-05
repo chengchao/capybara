@@ -13,7 +13,7 @@ declare global {
       getSettings: () => Promise<ApiKeyState>;
       setAnthropicApiKey: (key: string) => Promise<ApiKeyState>;
       getConversations: () => Promise<Conversation[]>;
-      saveConversations: (conversations: Conversation[]) => Promise<void>;
+      saveConversation: (conversation: Conversation) => Promise<void>;
       onVmStatus: (callback: (status: VmStatus) => void) => () => void;
       onAgentEvent: (callback: (event: AgentEvent) => void) => () => void;
     };

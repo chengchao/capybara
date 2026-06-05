@@ -1,23 +1,31 @@
 import { expect, test } from "bun:test";
 
-import { sanitizeStored } from "./conversations";
+import { isSafeId, sanitizeOne } from "./conversations";
 
 test("a persisted running status is settled to done with no taskId", () => {
-  const out = sanitizeStored([{ id: "a", status: "running", taskId: "t1" }]);
-  expect(out[0]).toMatchObject({ id: "a", status: "done", taskId: null });
+  expect(sanitizeOne({ id: "a", status: "running", taskId: "t1" })).toMatchObject({
+    id: "a",
+    status: "done",
+    taskId: null,
+  });
 });
 
 test("a done conversation passes through untouched", () => {
   const done = { id: "a", status: "done", taskId: null, items: [] };
-  expect(sanitizeStored([done])[0]).toEqual(done);
+  expect(sanitizeOne(done)).toEqual(done);
 });
 
-test("a non-array payload sanitizes to an empty list", () => {
-  expect(sanitizeStored({ nope: true })).toEqual([]);
-  expect(sanitizeStored(null)).toEqual([]);
-  expect(sanitizeStored("oops")).toEqual([]);
+test("a non-object sanitizes to null", () => {
+  expect(sanitizeOne(null)).toBeNull();
+  expect(sanitizeOne("oops")).toBeNull();
+  expect(sanitizeOne(42)).toBeNull();
 });
 
-test("an empty array stays empty", () => {
-  expect(sanitizeStored([])).toEqual([]);
+test("isSafeId accepts uuids/slugs and rejects path-ish or empty ids", () => {
+  expect(isSafeId("3f9a12bc-uuid_ABC")).toBe(true);
+  expect(isSafeId("../../etc/passwd")).toBe(false);
+  expect(isSafeId("a/b")).toBe(false);
+  expect(isSafeId("a.json")).toBe(false);
+  expect(isSafeId("")).toBe(false);
+  expect(isSafeId(123)).toBe(false);
 });
