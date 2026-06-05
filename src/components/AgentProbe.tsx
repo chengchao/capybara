@@ -1,35 +1,29 @@
 import { useEffect, useState } from "react";
 
+import { Transcript } from "@/components/chat/Transcript";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { addUser, applyEvent, emptyConversation } from "@/lib/transcript";
 
 import { startAgentTask, subscribeAgentEvents } from "../lib/agent";
 
 export default function AgentProbe() {
   const [prompt, setPrompt] = useState("Organize my Downloads folder");
   const [busy, setBusy] = useState(false);
-  const [events, setEvents] = useState<string[]>([]);
+  const [convo, setConvo] = useState(emptyConversation);
   const [error, setError] = useState("");
-  const [sessionId, setSessionId] = useState<string | null>(null);
   const [resume, setResume] = useState(true);
 
-  useEffect(() => {
-    const unsubscribe = subscribeAgentEvents((event) => {
-      if (event.event === "session_started") setSessionId(event.sessionId);
-      setEvents((prev) => [JSON.stringify(event, null, 2), ...prev].slice(0, 20));
-    });
-    return unsubscribe;
-  }, []);
+  useEffect(() => subscribeAgentEvents((event) => setConvo((c) => applyEvent(c, event))), []);
 
   async function runAgent() {
     setBusy(true);
     setError("");
+    const text = prompt;
+    const resumeSessionId = resume && convo.sessionId ? convo.sessionId : undefined;
+    setConvo((c) => addUser(c, text));
     try {
-      await startAgentTask({
-        prompt,
-        resumeSessionId: resume && sessionId ? sessionId : undefined,
-      });
-      setEvents((prev) => ["sent start_task request", ...prev]);
+      await startAgentTask({ prompt: text, resumeSessionId });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -38,8 +32,7 @@ export default function AgentProbe() {
   }
 
   function newConversation() {
-    setSessionId(null);
-    setEvents([]);
+    setConvo(emptyConversation());
   }
 
   return (
@@ -69,17 +62,15 @@ export default function AgentProbe() {
           variant="outline"
           size="sm"
           onClick={newConversation}
-          disabled={busy || !sessionId}
+          disabled={busy || !convo.sessionId}
         >
           New conversation
         </Button>
         <span className="text-muted-foreground">
-          {sessionId ? `session ${sessionId.slice(0, 8)}…` : "no session yet"}
+          {convo.sessionId ? `session ${convo.sessionId.slice(0, 8)}…` : "no session yet"}
         </span>
       </div>
-      <pre className="max-h-72 min-h-40 w-full overflow-auto rounded-md border bg-muted p-3 text-left font-mono text-sm break-words whitespace-pre-wrap">
-        {events.length ? events.join("\n\n") : "(no agent events yet)"}
-      </pre>
+      <Transcript conversation={convo} />
       {error && (
         <pre className="w-full rounded-md border border-destructive/30 bg-destructive/10 p-3 text-left font-mono text-sm break-words whitespace-pre-wrap text-destructive">
           {error}
