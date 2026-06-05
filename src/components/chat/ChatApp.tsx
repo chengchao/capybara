@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import Settings from "@/components/Settings";
 import { cancelAgentTask, respondConsent, startAgentTask, subscribeAgentEvents } from "@/lib/agent";
@@ -31,10 +31,21 @@ export function ChatApp() {
   // (not state) because the subscription closure must read the latest value.
   const runningIdRef = useRef<string | null>(null);
 
-  // Serialized snapshot of what's on disk, keyed by conversation id, so the
-  // persist effect can write only the conversations that actually changed (one
-  // file each) rather than rewriting the whole history.
+  // Serialized snapshot of what's on disk, keyed by conversation id, so we write
+  // only the conversations that actually changed (one file each) rather than
+  // rewriting the whole history.
   const savedRef = useRef(new Map<string, string>());
+
+  // Write every conversation whose content differs from the on-disk snapshot.
+  // Stable (reads only refs) so the flush listeners below can register once.
+  const persistDirty = useCallback((list: Conversation[]) => {
+    for (const c of list) {
+      const json = JSON.stringify(c);
+      if (savedRef.current.get(c.id) === json) continue;
+      savedRef.current.set(c.id, json);
+      void saveConversation(c);
+    }
+  }, []);
 
   // Hydrate from the on-disk store once, seeding an empty conversation on first
   // run. Async (the store is a main-process directory), so the UI holds until the
@@ -60,20 +71,36 @@ export function ChatApp() {
   }, []);
 
   // Persist changed conversations, debounced: a streaming task mutates its
-  // conversation on every event, so coalesce the burst, then write only the files
-  // whose content differs from the last-saved snapshot.
+  // conversation on every event, so coalesce the burst before writing.
   useEffect(() => {
     if (!hydrated) return;
-    const t = setTimeout(() => {
-      for (const c of conversations) {
-        const json = JSON.stringify(c);
-        if (savedRef.current.get(c.id) === json) continue;
-        savedRef.current.set(c.id, json);
-        void saveConversation(c);
-      }
-    }, 400);
+    const t = setTimeout(() => persistDirty(conversations), 400);
     return () => clearTimeout(t);
-  }, [conversations, hydrated]);
+  }, [conversations, hydrated, persistDirty]);
+
+  // A mirror of the latest conversations the flush listeners (registered once)
+  // can read without re-subscribing on every change.
+  const conversationsRef = useRef(conversations);
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
+
+  // Last chance to persist before the window is hidden or closed: the 400ms
+  // debounce would otherwise drop the just-finished turn on a quick quit.
+  // visibilitychange fires while the page is still alive (minimize, switch-away,
+  // close), giving the save IPC a chance to reach main; best-effort on a hard kill.
+  useEffect(() => {
+    const flush = () => persistDirty(conversationsRef.current);
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", flush);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", flush);
+    };
+  }, [persistDirty]);
 
   useEffect(
     () =>
@@ -97,25 +124,39 @@ export function ChatApp() {
     setError("");
     // Continuing a conversation resumes its SDK session; a fresh one has none.
     const resumeSessionId = convo.sessionId ?? undefined;
-    runningIdRef.current = convo.id;
+    const id = convo.id;
+    runningIdRef.current = id;
     setConversations((cs) =>
-      cs.map((c) => (c.id === convo.id ? { ...addUser(c, text), status: "running" } : c)),
+      cs.map((c) => (c.id === id ? { ...addUser(c, text), status: "running" } : c)),
     );
     try {
-      await startAgentTask({ prompt: text, resumeSessionId });
+      // Record the taskId from the IPC result, not just the task_started event,
+      // so Stop can always cancel even if that event is delayed or never arrives.
+      const { taskId } = await startAgentTask({ prompt: text, resumeSessionId });
+      setConversations((cs) => cs.map((c) => (c.id === id ? { ...c, taskId } : c)));
     } catch (e) {
       runningIdRef.current = null;
-      setConversations((cs) => cs.map((c) => (c.id === convo.id ? { ...c, status: "done" } : c)));
+      setConversations((cs) => cs.map((c) => (c.id === id ? { ...c, status: "done" } : c)));
       setError(e instanceof Error ? e.message : String(e));
     }
   }
 
-  // Stop the one in-flight task, whichever conversation owns it. The taskId is
-  // captured from the event stream (set the instant the run goes `running`), so
-  // the Stop button never races a not-yet-set id.
+  // Stop the one in-flight task, whichever conversation owns it.
   function stop() {
     const running = conversations.find((c) => c.status === "running");
-    if (running?.taskId) void cancelAgentTask(running.taskId);
+    if (!running) return;
+    if (running.taskId) {
+      // Normal path: ask main to abort; the resulting task_finished settles the
+      // status and retires any pending consent card.
+      void cancelAgentTask(running.taskId);
+      return;
+    }
+    // No taskId means the task never got far enough to report one (it died before
+    // startAgentTask resolved), so there's nothing for main to cancel and no
+    // task_finished is coming. Clear the local running lock directly so the UI
+    // recovers instead of wedging on `busy` (which disables New task + composers).
+    runningIdRef.current = null;
+    setConversations((cs) => cs.map((c) => (c.id === running.id ? { ...c, status: "done" } : c)));
   }
 
   // Tell main the user's choice and flip the card in the conversation that raised
