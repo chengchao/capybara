@@ -13,10 +13,12 @@ function statusLine(c: Conversation): string {
 export function Sidebar({
   conversation,
   vm,
+  running,
   onNewTask,
 }: {
   conversation: Conversation;
   vm: VmStatus;
+  running: boolean;
   onNewTask: () => void;
 }) {
   return (
@@ -34,7 +36,9 @@ export function Sidebar({
       <button
         type="button"
         onClick={onNewTask}
-        className="mx-3 mb-3 flex h-9 items-center gap-2 rounded-md border border-agent/40 bg-agent/10 px-3 text-sm font-medium text-agent hover:bg-agent/15"
+        disabled={running}
+        title={running ? "Stop the running task first" : undefined}
+        className="mx-3 mb-3 flex h-9 items-center gap-2 rounded-md border border-agent/40 bg-agent/10 px-3 text-sm font-medium text-agent hover:bg-agent/15 disabled:pointer-events-none disabled:opacity-50"
       >
         <span className="text-base leading-none">+</span> New task
       </button>

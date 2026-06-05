@@ -36,8 +36,9 @@ export function ChatApp() {
     if (convo.taskId) void cancelAgentTask(convo.taskId);
   }
 
-  // Tell main the user's choice, and reflect it locally (resolve the card, and
-  // on allow add the folder to this conversation's grants).
+  // Tell main the user's choice and flip the card. The granted folder appears in
+  // the list only when main confirms it via a `grant_added` event (applyEvent),
+  // so the UI mirrors main's authoritative store rather than the raw request.
   function respond(requestId: string, decision: "allow" | "deny") {
     void respondConsent(requestId, decision === "allow");
     setConvo((c) => resolveConsent(c, requestId, decision));
@@ -56,7 +57,12 @@ export function ChatApp() {
           gridTemplateColumns: infoOpen ? "240px minmax(0,1fr) 300px" : "240px minmax(0,1fr)",
         }}
       >
-        <Sidebar conversation={convo} vm={vm} onNewTask={newTask} />
+        <Sidebar
+          conversation={convo}
+          vm={vm}
+          running={convo.status === "running"}
+          onNewTask={newTask}
+        />
         <ConversationView
           conversation={convo}
           running={convo.status === "running"}

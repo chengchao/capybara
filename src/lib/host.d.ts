@@ -47,5 +47,8 @@ export type AgentEvent =
     }
   | { event: "task_finished"; taskId: string; sessionId?: string }
   // Not part of a task's emit stream — the consent broker (electron/consent.ts)
-  // sends this to the renderer to drive an inline Allow/Deny prompt.
-  | { event: "consent_request"; requestId: string; path: string };
+  // sends these to the renderer: `consent_request` drives an inline Allow/Deny
+  // prompt; `grant_added` reports a folder main actually recorded (normalized
+  // path) so the renderer's grant list mirrors main's authoritative store.
+  | { event: "consent_request"; requestId: string; path: string }
+  | { event: "grant_added"; path: string };

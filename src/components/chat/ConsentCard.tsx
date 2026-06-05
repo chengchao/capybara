@@ -7,12 +7,17 @@ export function ConsentCard({ block }: { block: ConsentBlock }) {
   const respond = useConsent();
 
   if (block.state !== "pending") {
-    const allowed = block.state === "allow";
+    const label =
+      block.state === "allow"
+        ? "✓ Allowed "
+        : block.state === "deny"
+          ? "✕ Denied "
+          : "— Dismissed ";
     return (
       <div
-        className={`font-mono text-xs ${allowed ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}
+        className={`font-mono text-xs ${block.state === "allow" ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}
       >
-        {allowed ? "✓ Allowed " : "✕ Denied "}
+        {label}
         {block.path}
       </div>
     );

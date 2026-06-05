@@ -21,14 +21,12 @@ export type ConsentBlock = {
   kind: "consent";
   id: string; // the broker's requestId
   path: string;
-  state: "pending" | "allow" | "deny";
+  // "cancelled" = the task ended (finished or Stopped) while the prompt was
+  // still pending, so the broker already resolved it as a deny — the card goes
+  // inert rather than dangling with live Allow/Deny buttons.
+  state: "pending" | "allow" | "deny" | "cancelled";
 };
 export type Block = TextBlock | ToolBlock | ConsentBlock;
-
-// The MCP tool the model calls to request a folder grant. Its tool_use is the
-// mechanism behind the inline consent prompt, so the UI renders the
-// consent_request card instead of a tool card for it.
-const CONSENT_TOOL = "request_capybara_directory";
 
 export type ServiceItem = { id: string; role: "service"; text: string };
 export type UserItem = { id: string; role: "user"; text: string };
@@ -101,8 +99,6 @@ export function applyEvent(c: Conversation, e: AgentEvent): Conversation {
     case "assistant_message":
       return appendBlock(c, (turnId, n) => ({ kind: "text", id: `${turnId}-b${n}`, text: e.text }));
     case "tool_use":
-      // The consent tool drives the inline prompt instead of a tool card.
-      if (e.tool === CONSENT_TOOL) return c;
       return appendBlock(c, () => ({
         kind: "tool",
         id: e.toolUseId,
@@ -114,7 +110,7 @@ export function applyEvent(c: Conversation, e: AgentEvent): Conversation {
     case "tool_result":
       return updateTool(c, e.toolUseId, e.content, e.isError);
     case "task_finished":
-      return { ...c, status: "done" };
+      return cancelPendingConsents({ ...c, status: "done" });
     case "consent_request":
       return appendBlock(c, () => ({
         kind: "consent",
@@ -122,36 +118,58 @@ export function applyEvent(c: Conversation, e: AgentEvent): Conversation {
         path: e.path,
         state: "pending",
       }));
+    case "grant_added":
+      // Main's authoritative store is the source of truth for grants — record
+      // the normalized path it reports (deduped).
+      return c.grants.includes(e.path) ? c : { ...c, grants: [...c.grants, e.path] };
     default:
       return c;
   }
 }
 
+// When a task ends, any consent card still "pending" can never be answered (the
+// broker resolved it as a deny on abort/finish), so retire it to "cancelled".
+function cancelPendingConsents(c: Conversation): Conversation {
+  return {
+    ...c,
+    items: c.items.map((it) =>
+      it.role === "assistant"
+        ? {
+            ...it,
+            blocks: it.blocks.map((b) =>
+              b.kind === "consent" && b.state === "pending"
+                ? { ...b, state: "cancelled" as const }
+                : b,
+            ),
+          }
+        : it,
+    ),
+  };
+}
+
 // The user's answer to a consent prompt isn't an AgentEvent — the renderer
-// applies it after calling respondConsent. On allow, the path joins the grants.
+// applies it after calling respondConsent, to flip the card. It does NOT touch
+// grants: the folder appears in the list only once main records it and emits
+// `grant_added` (the normalized path), so the UI mirrors the authoritative store
+// rather than optimistically echoing the raw requested path.
 export function resolveConsent(
   c: Conversation,
   requestId: string,
   decision: "allow" | "deny",
 ): Conversation {
-  let path: string | null = null;
-  const items = c.items.map((it) =>
-    it.role === "assistant"
-      ? {
-          ...it,
-          blocks: it.blocks.map((b) => {
-            if (b.kind === "consent" && b.id === requestId) {
-              path = b.path;
-              return { ...b, state: decision };
-            }
-            return b;
-          }),
-        }
-      : it,
-  );
-  const grants =
-    decision === "allow" && path && !c.grants.includes(path) ? [...c.grants, path] : c.grants;
-  return { ...c, items, grants };
+  return {
+    ...c,
+    items: c.items.map((it) =>
+      it.role === "assistant"
+        ? {
+            ...it,
+            blocks: it.blocks.map((b) =>
+              b.kind === "consent" && b.id === requestId ? { ...b, state: decision } : b,
+            ),
+          }
+        : it,
+    ),
+  };
 }
 
 // User messages aren't AgentEvents — the renderer adds them when a task is sent.

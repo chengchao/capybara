@@ -1,8 +1,9 @@
 import { tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 
-import { requestDirectoryConsent } from "../consent";
+import { notifyGrant, requestDirectoryConsent } from "../consent";
 import { commandResponseTimeoutMs, type SupervisorClient } from "../vm";
+import { REQUEST_DIRECTORY_TOOL } from "./allowedTools";
 import { grantDirectory } from "./grants";
 
 const DEFAULT_TIMEOUT_MS = 60_000;
@@ -68,6 +69,7 @@ export function buildTools(
   supervisor: SupervisorClient,
   resolveSession: () => Promise<string>,
   getSdkSessionId: () => string,
+  signal?: AbortSignal,
 ) {
   const bash = tool(
     "Bash",
@@ -99,22 +101,24 @@ export function buildTools(
   // has connected; the PreToolUse hook denies anything else and tells the model
   // to call this. On Allow the grant is recorded and the retry passes the hook.
   const requestDirectory = tool(
-    "request_capybara_directory",
+    REQUEST_DIRECTORY_TOOL,
     "Request access to a host directory so the file tools (Read, Glob, Write) can use it. Call this after a file tool is denied for a path that is not connected, then retry the file tool.",
     {
       path: z.string().describe("Absolute path to the host directory to request access to."),
     },
     async (args) => {
-      const ok = await requestDirectoryConsent(args.path);
+      const ok = await requestDirectoryConsent(args.path, signal);
       if (!ok) {
         return {
           content: [{ type: "text", text: `User denied access to ${args.path}.` }],
           isError: true,
         };
       }
-      // grantDirectory only stores an absolute directory path; if it didn't, say
-      // so instead of falsely reporting success (which would loop the retry).
-      if (!grantDirectory(getSdkSessionId(), args.path)) {
+      // grantDirectory returns the normalized stored path, or null if it wasn't an
+      // absolute directory; say so instead of falsely reporting success (which
+      // would loop the retry).
+      const granted = grantDirectory(getSdkSessionId(), args.path);
+      if (!granted) {
         return {
           content: [
             {
@@ -125,9 +129,11 @@ export function buildTools(
           isError: true,
         };
       }
+      // Drive the renderer's grant list from the canonical path main recorded.
+      notifyGrant(granted);
       return {
         content: [
-          { type: "text", text: `Granted access to ${args.path}. Retry your file operation.` },
+          { type: "text", text: `Granted access to ${granted}. Retry your file operation.` },
         ],
       };
     },

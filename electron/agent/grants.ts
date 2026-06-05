@@ -62,15 +62,17 @@ function patternEscapes(pattern: unknown): boolean {
   return pattern.split(/[/\\{},]/).includes("..");
 }
 
-// Returns true if the grant was stored. False means the path wasn't an absolute
-// directory and nothing was recorded — the caller must not claim success.
-export function grantDirectory(sessionId: string, dir: string): boolean {
+// Returns the normalized path that was stored, or null if `dir` wasn't an
+// absolute directory (nothing recorded — the caller must not claim success).
+// Callers surface the returned canonical path so the UI shows what was actually
+// granted, not the raw (possibly `~`/relative) string the model passed.
+export function grantDirectory(sessionId: string, dir: string): string | null {
   const norm = normalize(dir);
-  if (!norm) return false;
+  if (!norm) return null;
   const dirs = store.get(sessionId) ?? [];
   if (!dirs.includes(norm)) dirs.push(norm);
   store.set(sessionId, dirs);
-  return true;
+  return norm;
 }
 
 export function evaluateFileTool(
