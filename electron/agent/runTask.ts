@@ -4,7 +4,7 @@ import { createSdkMcpServer, query, type Options } from "@anthropic-ai/claude-ag
 import { app } from "electron";
 
 import { getLlmProxy } from "../llmProxy";
-import { getAnthropicApiKey, hasStoredApiKey } from "../settings";
+import { effectiveModel, getAnthropicApiKey, hasStoredApiKey } from "../settings";
 import { getSupervisor } from "../vm";
 import {
   ALLOWED_TOOLS,
@@ -15,8 +15,6 @@ import {
 } from "./allowedTools";
 import { evaluateFileTool } from "./grants";
 import { buildTools } from "./tools";
-
-const MODEL = process.env.CAPYBARA_AGENT_MODEL ?? "claude-sonnet-4-6";
 
 const SYSTEM_PROMPT = `You are Capybara, an office-work agent. Read, Glob, and Write operate on the host filesystem using absolute paths, but only within directories the user has connected; if a path is not connected the tool is denied — call request_capybara_directory({ path }) to ask the user, then retry. Bash runs inside a Lima VM sandbox, a separate filesystem where the working directory is /workspace and connected host directories appear at /mnt/<name>. Files you Read/Write on the host are not visible to Bash unless they fall under a connected directory, and vice versa.`;
 
@@ -211,7 +209,8 @@ export async function runAgentTask(
     // `...process.env` — the claude CLI reads all of these.
     const proxy = getLlmProxy();
     const options: Options = {
-      model: MODEL,
+      // Read per task so a Settings change applies to the next run without a restart.
+      model: effectiveModel(),
       systemPrompt: SYSTEM_PROMPT,
       mcpServers: { capybara: mcp },
       // Availability: only these host built-ins exist for the model; every other

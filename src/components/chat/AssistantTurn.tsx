@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 import type { AssistantItem } from "@/lib/transcript";
 
 import { CapyMark } from "./CapyMark";
@@ -5,7 +7,11 @@ import { ConsentCard } from "./ConsentCard";
 import { MarkdownText } from "./MarkdownText";
 import { ToolCard } from "./ToolCard";
 
-export function AssistantTurn({ item }: { item: AssistantItem }) {
+// Memoized: every streaming event replaces the conversation, but applyEvent keeps
+// unchanged items referentially stable, so finished turns skip re-render — and so
+// avoid re-running syntax highlighting over their (unchanged) code blocks. Only
+// the in-flight turn, whose item reference actually changes, re-renders.
+export const AssistantTurn = memo(function AssistantTurn({ item }: { item: AssistantItem }) {
   return (
     <div className="flex gap-3">
       <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md border border-agent/40 bg-agent/10 text-agent">
@@ -21,4 +27,4 @@ export function AssistantTurn({ item }: { item: AssistantItem }) {
       </div>
     </div>
   );
-}
+});

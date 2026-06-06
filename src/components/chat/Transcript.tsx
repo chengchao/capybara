@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { ArrowDownIcon } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import type { Conversation } from "@/lib/transcript";
 
@@ -35,18 +36,36 @@ function Working() {
   );
 }
 
+// How close to the bottom (px) still counts as "stuck to the bottom".
+const BOTTOM_THRESHOLD = 48;
+
 export function Transcript({ conversation }: { conversation: Conversation }) {
   const ref = useRef<HTMLDivElement>(null);
-  // Stick to the bottom as events stream in, but not if the user has scrolled
-  // up to read earlier output. (A jump-to-latest affordance is a later PR.)
+  // Stick to the bottom as events stream in, but not if the user has scrolled up
+  // to read earlier output. `atBottom` mirrors this as state so the jump-to-latest
+  // button can show/hide; `stick` is the ref the scroll effect reads synchronously.
   const stick = useRef(true);
+  const [atBottom, setAtBottom] = useState(true);
+
   useEffect(() => {
     const el = ref.current;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
   }, [conversation.items, conversation.status]);
+
   const onScroll = () => {
     const el = ref.current;
-    if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+    if (!el) return;
+    const bottom = el.scrollHeight - el.scrollTop - el.clientHeight < BOTTOM_THRESHOLD;
+    stick.current = bottom;
+    setAtBottom(bottom);
+  };
+
+  const jumpToLatest = () => {
+    const el = ref.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+    stick.current = true;
+    setAtBottom(true);
   };
 
   if (conversation.items.length === 0) {
@@ -58,15 +77,28 @@ export function Transcript({ conversation }: { conversation: Conversation }) {
   }
 
   return (
-    <div ref={ref} onScroll={onScroll} className="h-full overflow-auto px-5 py-5 text-left">
-      <div className="mx-auto max-w-3xl space-y-4">
-        {conversation.items.map((it) => {
-          if (it.role === "user") return <UserMessage key={it.id} text={it.text} />;
-          if (it.role === "service") return <ServiceMessage key={it.id} text={it.text} />;
-          return <AssistantTurn key={it.id} item={it} />;
-        })}
-        {conversation.status === "running" && <Working />}
+    <div className="relative h-full">
+      <div ref={ref} onScroll={onScroll} className="h-full overflow-auto px-5 py-5 text-left">
+        <div className="mx-auto max-w-3xl space-y-4">
+          {conversation.items.map((it) => {
+            if (it.role === "user") return <UserMessage key={it.id} text={it.text} />;
+            if (it.role === "service") return <ServiceMessage key={it.id} text={it.text} />;
+            return <AssistantTurn key={it.id} item={it} />;
+          })}
+          {conversation.status === "running" && <Working />}
+        </div>
       </div>
+      {!atBottom && (
+        <button
+          type="button"
+          onClick={jumpToLatest}
+          aria-label="Jump to latest"
+          className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs font-medium shadow-md hover:bg-muted"
+        >
+          <ArrowDownIcon className="size-3.5" />
+          Latest
+        </button>
+      )}
     </div>
   );
 }

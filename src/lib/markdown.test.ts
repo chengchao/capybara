@@ -31,11 +31,37 @@ test("a backticked glob is code, not mangled", () => {
   ]);
 });
 
-test("splitFences separates code from prose and trims the lang + trailing newline", () => {
+test("splitFences separates code from prose, capturing the lang and trimming it", () => {
   expect(splitFences("before ```js\nconst x = 1;\n``` after")).toEqual([
     { code: false, value: "before " },
-    { code: true, value: "const x = 1;" },
+    { code: true, lang: "js", value: "const x = 1;" },
     { code: false, value: " after" },
+  ]);
+});
+
+test("splitFences leaves lang undefined for a bare fence", () => {
+  expect(splitFences("```\nplain\n```")).toEqual([
+    { code: false, value: "" },
+    { code: true, lang: undefined, value: "plain" },
+    { code: false, value: "" },
+  ]);
+});
+
+test("splitFences takes the first token of an info string with attributes", () => {
+  expect(splitFences("```python {.line-numbers}\ncode\n```")).toEqual([
+    { code: false, value: "" },
+    { code: true, lang: "python", value: "code" },
+    { code: false, value: "" },
+  ]);
+});
+
+test("splitFences keeps a numeric/version first line of a bare fence as code", () => {
+  // The info string is empty (fence followed immediately by a newline), so the
+  // first content line must survive rather than being eaten as a phantom lang.
+  expect(splitFences("```\n123\nfoo()\n```")).toEqual([
+    { code: false, value: "" },
+    { code: true, lang: undefined, value: "123\nfoo()" },
+    { code: false, value: "" },
   ]);
 });
 

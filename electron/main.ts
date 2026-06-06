@@ -7,22 +7,34 @@ import { runAgentTask } from "./agent/runTask";
 import { respondConsent } from "./consent";
 import { loadConversations, saveConversation } from "./conversations";
 import { startLlmProxy, stopLlmProxy } from "./llmProxy";
-import { getAnthropicApiKey, hasStoredApiKey, setAnthropicApiKey } from "./settings";
+import {
+  effectiveModel,
+  getAnthropicApiKey,
+  hasStoredApiKey,
+  setAnthropicApiKey,
+  setModel,
+} from "./settings";
 import { ensureVm, getVmStatus, setStatusEmitter, stopSupervisor, stopVm } from "./vm";
 
 const DEV_URL = process.env.VITE_DEV_SERVER_URL;
 
-type ApiKeyState = { hasApiKey: boolean; apiKeyPreview: string | null; unreadable: boolean };
+type SettingsState = {
+  hasApiKey: boolean;
+  apiKeyPreview: string | null;
+  unreadable: boolean;
+  model: string;
+};
 
-function describeApiKey(): ApiKeyState {
+function describeSettings(): SettingsState {
+  const model = effectiveModel();
   const key = getAnthropicApiKey();
   if (key) {
     const preview = key.length > 11 ? `${key.slice(0, 7)}…${key.slice(-4)}` : "•••• set";
-    return { hasApiKey: true, apiKeyPreview: preview, unreadable: false };
+    return { hasApiKey: true, apiKeyPreview: preview, unreadable: false, model };
   }
   // A stored key that won't decrypt (locked/unavailable keyring, or copied from
   // another machine) is reported as unreadable — distinct from no key at all.
-  return { hasApiKey: false, apiKeyPreview: null, unreadable: hasStoredApiKey() };
+  return { hasApiKey: false, apiKeyPreview: null, unreadable: hasStoredApiKey(), model };
 }
 
 const gotLock = app.requestSingleInstanceLock();
@@ -74,12 +86,18 @@ if (!gotLock) {
 
   ipcMain.handle("get-vm-status", () => getVmStatus());
 
-  ipcMain.handle("get-settings", (): ApiKeyState => describeApiKey());
+  ipcMain.handle("get-settings", (): SettingsState => describeSettings());
 
-  ipcMain.handle("set-anthropic-api-key", (_event, key: unknown): ApiKeyState => {
+  ipcMain.handle("set-anthropic-api-key", (_event, key: unknown): SettingsState => {
     if (typeof key !== "string") throw new Error("key must be a string");
     setAnthropicApiKey(key.trim());
-    return describeApiKey();
+    return describeSettings();
+  });
+
+  ipcMain.handle("set-model", (_event, model: unknown): SettingsState => {
+    if (typeof model !== "string") throw new Error("model must be a string");
+    setModel(model.trim());
+    return describeSettings();
   });
 
   ipcMain.handle(

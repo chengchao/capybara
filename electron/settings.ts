@@ -6,8 +6,12 @@ import { app, safeStorage } from "electron";
 // The key is encrypted at rest with the OS credential store (Keychain on
 // macOS, DPAPI on Windows, libsecret/kwallet on Linux) via safeStorage and
 // kept as base64 ciphertext. The field name carries the `Enc` suffix so the
-// on-disk shape is unambiguous.
-type Settings = { anthropicApiKeyEnc?: string };
+// on-disk shape is unambiguous. `model` is the user-chosen agent model (plain
+// text, not a secret).
+type Settings = { anthropicApiKeyEnc?: string; model?: string };
+
+// The model used when the user hasn't picked one and no env override is set.
+export const DEFAULT_MODEL = "claude-sonnet-4-6";
 
 function settingsPath(): string {
   return path.join(app.getPath("userData"), "settings.json");
@@ -58,5 +62,18 @@ export function setAnthropicApiKey(key: string): void {
   } else {
     delete settings.anthropicApiKeyEnc;
   }
+  write(settings);
+}
+
+// The agent model to run: the user's saved choice, else a dev env override, else
+// the default. Used both to configure a task and to report the effective model.
+export function effectiveModel(): string {
+  return read().model || process.env.CAPYBARA_AGENT_MODEL || DEFAULT_MODEL;
+}
+
+export function setModel(model: string): void {
+  const settings = read();
+  if (model) settings.model = model;
+  else delete settings.model;
   write(settings);
 }
