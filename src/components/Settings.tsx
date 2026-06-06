@@ -87,9 +87,15 @@ export default function Settings({
     setDraft("");
     setReveal(false);
     getSettings()
-      .then(setState)
+      .then((s) => {
+        setState(s);
+        // Re-sync the parent's model with the authoritative effective model in
+        // case it changed since the initial fetch (env override, another window),
+        // so the picker and InfoPane don't show a stale value.
+        onModelChange(s.model);
+      })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
-  }, [open]);
+  }, [open, onModelChange]);
 
   async function save(key: string) {
     setBusy(true);

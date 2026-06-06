@@ -31,15 +31,20 @@ export function parseInline(text: string): Inline[] {
 
 export type Segment = { code: boolean; value: string; lang?: string };
 
-const FENCE_LANG = /^([a-zA-Z0-9+#._-]*)\n/;
+// The opening fence's info string is everything up to the first newline. The
+// language is its first whitespace-delimited token (so `python {.line-numbers}`
+// → "python"); the whole info line, plus a single trailing newline, is trimmed
+// from the code. Matching the full line (not a narrow character class) avoids
+// leaving an unrecognised info string in the rendered code.
+const FENCE_INFO = /^([^\n]*)\n/;
 
-// Split on ``` fences; odd segments are code. The opening fence's optional
-// language tag is captured (for syntax highlighting) and, with a trailing
-// newline, trimmed from the value. An unclosed fence renders its tail as code.
+// Split on ``` fences; odd segments are code. An unclosed fence renders its tail
+// as code.
 export function splitFences(text: string): Segment[] {
   return text.split("```").map((value, i) => {
     if (i % 2 === 0) return { code: false, value };
-    const lang = value.match(FENCE_LANG)?.[1] || undefined;
-    return { code: true, lang, value: value.replace(FENCE_LANG, "").replace(/\n$/, "") };
+    const info = value.match(FENCE_INFO)?.[1] ?? "";
+    const lang = info.trim().split(/\s+/)[0] || undefined;
+    return { code: true, lang, value: value.replace(FENCE_INFO, "").replace(/\n$/, "") };
   });
 }

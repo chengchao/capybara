@@ -47,6 +47,24 @@ test("splitFences leaves lang undefined for a bare fence", () => {
   ]);
 });
 
+test("splitFences takes the first token of an info string with attributes", () => {
+  expect(splitFences("```python {.line-numbers}\ncode\n```")).toEqual([
+    { code: false, value: "" },
+    { code: true, lang: "python", value: "code" },
+    { code: false, value: "" },
+  ]);
+});
+
+test("splitFences keeps a numeric/version first line of a bare fence as code", () => {
+  // The info string is empty (fence followed immediately by a newline), so the
+  // first content line must survive rather than being eaten as a phantom lang.
+  expect(splitFences("```\n123\nfoo()\n```")).toEqual([
+    { code: false, value: "" },
+    { code: true, lang: undefined, value: "123\nfoo()" },
+    { code: false, value: "" },
+  ]);
+});
+
 test("text with no fence is one prose segment", () => {
   expect(splitFences("no code here")).toEqual([{ code: false, value: "no code here" }]);
 });

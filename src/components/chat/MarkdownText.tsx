@@ -11,12 +11,17 @@ import { parseInline, splitFences } from "@/lib/markdown";
 function CodeBlock({ value, lang }: { value: string; lang?: string }) {
   const [copied, setCopied] = React.useState(false);
   const html = React.useMemo(() => highlightCode(value, lang), [value, lang]);
+  // Track the "Copied ✓" reset timer so it's cleared on unmount (the block can be
+  // replaced mid-stream) and never fires setState on a gone component.
+  const resetTimer = React.useRef<ReturnType<typeof setTimeout>>(undefined);
+  React.useEffect(() => () => clearTimeout(resetTimer.current), []);
 
   async function copy() {
     try {
       await navigator.clipboard.writeText(value);
       setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      clearTimeout(resetTimer.current);
+      resetTimer.current = setTimeout(() => setCopied(false), 1500);
     } catch {
       // Clipboard may be unavailable (denied permission); leave the button as-is.
     }
