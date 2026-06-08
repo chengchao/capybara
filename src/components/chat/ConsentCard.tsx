@@ -1,26 +1,37 @@
 import { Button } from "@/components/ui/button";
-import type { ConsentBlock } from "@/lib/transcript";
+import type { ConsentBlock, ToolBlock } from "@/lib/transcript";
 
 import { useConsent } from "./consent-context";
+import { ToolCard } from "./ToolCard";
+
+// While pending this is an Allow/Deny prompt (the folder-request tool has no
+// ToolCard of its own — runTask suppresses it). Once answered, present the
+// outcome as a normal tool card so it reads like Glob/Bash: tool name, input
+// (the requested path), and output (the grant result), not a bare status line.
+const REQUEST_TOOL = "request_capybara_directory";
+
+function resolvedAsTool(block: ConsentBlock): ToolBlock {
+  const allowed = block.state === "allow";
+  return {
+    kind: "tool",
+    id: block.id,
+    name: REQUEST_TOOL,
+    origin: "host",
+    input: { path: block.path },
+    status: allowed ? "done" : "error",
+    result: allowed
+      ? `Granted access to ${block.path}.`
+      : block.state === "deny"
+        ? `Access denied to ${block.path}.`
+        : `Dismissed — the task ended before you answered.`,
+  };
+}
 
 export function ConsentCard({ block }: { block: ConsentBlock }) {
   const respond = useConsent();
 
   if (block.state !== "pending") {
-    const label =
-      block.state === "allow"
-        ? "✓ Allowed "
-        : block.state === "deny"
-          ? "✕ Denied "
-          : "— Dismissed ";
-    return (
-      <div
-        className={`font-mono text-xs ${block.state === "allow" ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}
-      >
-        {label}
-        {block.path}
-      </div>
-    );
+    return <ToolCard block={resolvedAsTool(block)} />;
   }
 
   return (
