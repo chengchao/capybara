@@ -102,7 +102,7 @@ export function ToolCard({ block }: { block: ToolBlock }) {
       </button>
       {open && (
         <div className="space-y-2 border-t bg-muted/40 px-3 py-2 font-mono text-xs">
-          <Field label="input" value={JSON.stringify(block.input)} />
+          <Field label="input" value={JSON.stringify(block.input, null, 2)} />
           {block.result !== undefined && <Field label="output" value={resultText(block.result)} />}
         </div>
       )}
