@@ -42,6 +42,18 @@ jobs:
           path: node_modules
           key: ${{ runner.os }}-${{ matrix.arch }}-bun-${{ hashFiles('bun.lock') }}
 
+      - name: Cache runtimes
+        # The Bun binary + Lima bundle fetched by setup:runtimes. fetch-runtimes
+        # skips the download when these exist, so a hit makes dist:prepare's
+        # setup:runtimes step a no-op. Keyed on the manifest (the pinned URLs +
+        # sha256) so a runtime bump busts the cache.
+        uses: actions/cache@v5
+        with:
+          path: |
+            binaries
+            vendor/lima
+          key: ${{ runner.os }}-${{ matrix.arch }}-runtimes-${{ hashFiles('runtime-manifest.json') }}
+
       - name: Install
         # Each runner installs on its native arch so the right SDK platform
         # package + Bun binary land in node_modules / binaries.
@@ -71,3 +83,27 @@ jobs:
             release/*.dmg
             release/latest*.yml
           if-no-files-found: ignore
+
+  # Gather every arch's DMG and attach them to a GitHub Release so there's a
+  # stable download URL. Tag-only: workflow_dispatch runs still produce build
+  # artifacts but don't cut a Release.
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: capybara-*
+          merge-multiple: true
+          path: dist-artifacts
+
+      # Only the DMGs go on the Release. The per-arch latest*.yml update feeds
+      # collide on one filename across arches — wiring electron-updater is a
+      # separate task, deferred until there's an auto-update consumer.
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist-artifacts/*.dmg
+          fail_on_unmatched_files: true
