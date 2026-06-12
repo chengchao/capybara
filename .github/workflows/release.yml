@@ -63,13 +63,23 @@ jobs:
         run: bun run dist:prepare
 
       - name: Build
-        # Pass --mac --<arch> so electron-builder only packages this runner's
-        # arch — beforePack stages a single Bun binary for it.
-        run: bun x electron-builder --mac --${{ matrix.arch }}
+        # --mac --<arch>: package only this runner's arch (beforePack stages a
+        # single Bun binary for it). --publish never: the `release` job owns
+        # publishing; without this, a v* tag makes electron-builder implicitly
+        # publish to GitHub itself (deprecated, and needs a token we don't pass).
+        #
+        # GitHub injects an unset secret as "" (not absent), and CSC_LINK=""
+        # makes electron-builder resolve it as a cert path → the project dir →
+        # "<dir> not a file". So when no cert is configured, unset the signing
+        # vars and disable identity auto-discovery for a clean unsigned build.
+        # Populate the secrets to sign + notarize for real.
+        run: |
+          if [ -z "$CSC_LINK" ]; then
+            unset CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+          fi
+          bun x electron-builder --mac --${{ matrix.arch }} --publish never
         env:
-          # macOS signing + notarization. Populate via repo secrets when
-          # the signing cert is available; absent secrets => unsigned build
-          # (electron-builder skips signing rather than failing).
           CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
